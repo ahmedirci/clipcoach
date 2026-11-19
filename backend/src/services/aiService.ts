@@ -1,4 +1,4 @@
-import type { GenerateResultResource } from "../Resources.js";
+import type { GenerateRequestResource, GenerateResultResource } from "../Resources.js";
 
 // Feste Beispieldaten für den Demo-Modus (ohne API-Key)
 const DEMO_RESULT: GenerateResultResource = {
@@ -18,8 +18,10 @@ const DEMO_RESULT: GenerateResultResource = {
 
 /**
  * Liefert Vorschläge für Hooks, Caption, Hashtags und Titel.
- * Aktuell immer im Demo-Modus. Die KI-Anbindung folgt in Schritt 4.
+ * Bekommt nur bereits validierte Daten.
+ * Aktuell immer im Demo-Modus, die Eingaben werden noch nicht genutzt.
+ * Die KI-Anbindung folgt in Schritt 4.
  */
-export async function generateSuggestions(): Promise<GenerateResultResource> {
+export async function generateSuggestions(_request: GenerateRequestResource): Promise<GenerateResultResource> {
     return DEMO_RESULT;
 }
