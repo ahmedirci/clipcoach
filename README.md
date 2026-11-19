@@ -1,14 +1,14 @@
 # ClipCoach
 
-ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch und Rocket League erfolgreicher auf TikTok, Instagram und YouTube Shorts zu posten. Man gibt einen Link zum Clip und eine kurze Beschreibung ein und bekommt von einer KI Vorschläge für Hooks, Caption, Hashtags und Titel.
+ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket League und Valorant erfolgreicher auf TikTok, Instagram und YouTube Shorts zu posten. Man gibt einen YouTube-Link zum Clip und eine kurze Beschreibung ein und bekommt von einer KI Vorschläge für Hooks, Caption, Hashtags und Titel.
 
 > **Status:** in Entwicklung. Dies ist ein privates Lernprojekt.
 
 ## Fahrplan
 
 - [x] 1. Projektstruktur, Git-Repo, `.gitignore`, README-Grundgerüst
-- [ ] 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Beispieldaten (Demo-Modus)
-- [ ] 3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests
+- [x] 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Beispieldaten (Demo-Modus)
+- [x] 3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests
 - [ ] 4. KI-Anbindung mit Google Gemini auf Basis der Beschreibung
   - [ ] 4b. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
 - [ ] 5. Frontend: Formular und Ergebnisanzeige
@@ -18,14 +18,14 @@ ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch und Rocket League erf
 
 ## Geplante Funktionen
 
-1. Link zum Clip einfügen (YouTube, TikTok oder Medal.tv)
+1. YouTube-Link zum Clip einfügen (Video oder Short)
 2. Spiel und Zielplattform wählen und den Clip kurz beschreiben
 3. Die KI liefert:
    - Hooks für die ersten 3 Sekunden
    - eine Caption
    - passende Hashtags
    - Titelvorschläge
-4. Bei YouTube-Links analysiert die KI zusätzlich das Video selbst (Bild und Ton). Die App zeigt ehrlich an, ob die Vorschläge auf der Videoanalyse oder nur auf der Beschreibung beruhen.
+4. Ist das Video öffentlich, analysiert die KI zusätzlich das Video selbst (Bild und Ton). Die App zeigt ehrlich an, ob die Vorschläge auf der Videoanalyse oder nur auf der Beschreibung beruhen.
 
 ## Tech-Stack
 
@@ -62,7 +62,8 @@ clipcoach/
 ## Sicherheitsentscheidungen (Überblick)
 
 - **Keine Datei-Uploads und keine eigenen Video-Downloads.** Clips werden nur per Link angegeben.
-- **URL-Allowlist:** Nur `https`-Links zu YouTube, TikTok und Medal.tv sind erlaubt. Der Hostname wird exakt geprüft, damit Tricks wie `youtube.com.boese-seite.de` nicht durchkommen.
+- **URL-Allowlist:** Nur `https`-Links zu YouTube sind erlaubt. Der Hostname wird exakt geprüft, damit Tricks wie `youtube.com.boese-seite.de` nicht durchkommen.
+- **Bewusst nur YouTube:** Nur YouTube-Videos kann die KI direkt per Link analysieren. Andere Anbieter würden eigene Video-Downloads erfordern.
 - **Validierung im Backend:** Das Backend vertraut dem Frontend nie und prüft alle Eingaben selbst.
 - **API-Key nur im Backend:** Der Key steht in `backend/.env`, die nicht ins Repo kommt.
 - **Rate Limiting, helmet und CORS** schützen die API.

@@ -11,28 +11,28 @@ Ich bin Student (Medieninformatik) und bewerbe mich als Werkstudent in der Softw
 - Erkläre nach jeder Änderung auf Deutsch, was du gemacht hast und warum.
 - Halte den Code einfach und gut lesbar. Lieber verständlich als clever.
 - Keine unnötigen Bibliotheken. Wenn du eine neue Abhängigkeit vorschlägst, begründe sie.
-- Manche Teile (z. B. die URL-Allowlist) will ich selbst schreiben. Wenn ich das sage, gib mir nur Hinweise und prüfe danach meinen Code, statt ihn für mich zu schreiben.
+- Claude schreibt den gesamten Code. Ich lasse mir jede Änderung erklären, damit ich sie verstehe und vertreten kann.
 - Schlage nach jedem funktionierenden Schritt einen Git-Commit mit aussagekräftiger Nachricht vor.
 
 ## Was ClipCoach macht
 
-Eine Web-App für Gamer (Fortnite, Overwatch, Rocket League), die ihre Gaming-Clips erfolgreicher auf TikTok, Instagram und YouTube Shorts posten wollen.
+Eine Web-App für Gamer (Fortnite, Overwatch, Minecraft, Rocket League, Valorant), die ihre Gaming-Clips erfolgreicher auf TikTok, Instagram und YouTube Shorts posten wollen.
 
 Ablauf:
 
-1. Nutzer fügt einen Link zu seinem Clip ein (YouTube, TikTok oder Medal.tv).
+1. Nutzer fügt einen YouTube-Link zu seinem Clip ein (normales Video oder Short). Andere Anbieter wie TikTok oder Medal.tv werden bewusst nicht unterstützt (siehe „Videoanalyse“).
 2. Nutzer wählt Spiel und Zielplattform und beschreibt den Clip kurz.
 3. Das Backend prüft die Eingaben und fragt eine KI an.
    - Version 1: Die KI arbeitet mit der Beschreibung des Nutzers.
-   - Version 2: Bei YouTube-Links (inkl. Shorts) analysiert die KI zusätzlich das Video selbst (Bild und Ton). Bei TikTok und Medal.tv bleibt es bei der Beschreibung.
+   - Version 2: Die KI analysiert zusätzlich das YouTube-Video selbst (Bild und Ton), sofern es öffentlich ist.
 4. Die KI liefert: Hooks für die ersten 3 Sekunden, eine Caption, Hashtags und Titelvorschläge.
 5. Das Frontend zeigt die Ergebnisse an, optional mit Videovorschau, und zeigt ehrlich an, ob das Video analysiert wurde oder nur die Beschreibung.
 
-## Tech-Stack (gleiche Hauptversionen wie in meinen Studienprojekten)
+## Tech-Stack (immer aktuelle stabile Versionen, keine Beta-, RC- oder Snapshot-Versionen)
 
 - **Frontend:** React 19 mit TypeScript, aufgesetzt mit Vite
 - **Backend:** Node.js mit TypeScript und Express 5 (REST-API)
-- **Validierung im Backend:** express-validator für `game`, `platform` und `description`. Die URL-Allowlist schreibe ich selbst als eigene Funktion.
+- **Validierung im Backend:** express-validator für `game`, `platform` und `description`. Die URL-Allowlist ist eine eigene Funktion (`isAllowedClipUrl` in `services/urlValidation.ts`).
 - **Tests Backend:** Vitest mit supertest (im Studium Jest, die API ist fast identisch)
 - **Tests Frontend:** Vitest mit @testing-library/react und @testing-library/user-event, jsdom. `fetch` wird in Tests mit `vi.spyOn` gemockt.
 - **Absicherung:** express-rate-limit, helmet, cors (kenne ich alle aus dem Studium)
@@ -111,7 +111,7 @@ Request:
 ```json
 {
   "url": "https://www.youtube.com/watch?v=...",
-  "game": "fortnite | overwatch | rocket-league",
+  "game": "fortnite | overwatch | minecraft | rocket-league | valorant",
   "platform": "tiktok | instagram | youtube-shorts",
   "description": "Kurze Beschreibung des Clips"
 }
@@ -129,7 +129,7 @@ Response:
 }
 ```
 
-`source` zeigt, worauf die Vorschläge beruhen: nur auf der Beschreibung oder zusätzlich auf der Videoanalyse (ab Version 2, nur bei YouTube).
+`source` zeigt, worauf die Vorschläge beruhen: nur auf der Beschreibung oder zusätzlich auf der Videoanalyse (ab Version 2).
 
 Bei ungültigen Eingaben: Status 400 mit Body `{ "errors": [...] }` (Format von express-validator), ohne interne Details.
 
@@ -140,12 +140,14 @@ Bei ungültigen Eingaben: Status 400 mit Body `{ "errors": [...] }` (Format von 
 - **Free-Tier-Limits:** Wenn Gemini mit Status 429 antwortet (Limit erreicht), bekommt der Client eine verständliche Meldung wie „Gerade zu viele Anfragen, bitte gleich nochmal versuchen“, keine internen Details.
 - Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Spiel, Plattform, Clip-Beschreibung und (ab Version 2) der öffentliche YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
 
-## Videoanalyse (Version 2, nur YouTube)
+## Videoanalyse (Version 2)
 
 - Gemini kann öffentliche YouTube-Videos direkt über den Link analysieren (Bild und Ton). Unser Server lädt dabei nichts herunter, Google holt das Video selbst.
 - Nur öffentliche Videos funktionieren, nicht privat oder nicht gelistet. Schlägt die Analyse fehl, fällt das Backend auf die Beschreibung zurück (`source: "description"`).
-- Nur Links, die die Allowlist bestanden haben und YouTube-Hosts sind, werden an Gemini übergeben.
-- TikTok und Medal.tv: bewusst keine Videoanalyse. Dafür müsste der Server Clips herunterladen und hochladen. Das widerspricht der Sicherheitsentscheidung „keine Uploads, keine eigenen Video-Downloads“ und ist bei TikTok auch rechtlich heikel.
+- Nur Links, die die Allowlist bestanden haben, werden an Gemini übergeben.
+- **Warum nur YouTube-Links erlaubt sind (TikTok und Medal.tv bewusst nicht):**
+  - Gemini kann nur YouTube-Links direkt analysieren. Für andere Anbieter müsste der Server Clips herunterladen und hochladen. Das widerspricht der Sicherheitsentscheidung „keine Uploads, keine eigenen Video-Downloads“ und ist bei TikTok auch rechtlich heikel.
+  - Ohne Videoanalyse würden die Vorschläge nur auf der Beschreibung beruhen. Nutzer könnten dann beliebige fremde Clips mit unpassenden Beschreibungen kombinieren und Vorschau und Ergebnisse zum Trollen missbrauchen.
 - Videoanalyse verbraucht deutlich mehr vom kostenlosen Kontingent als Text. Rate Limiting ist hier besonders wichtig.
 
 ## Sicherheitsregeln (immer einhalten)
@@ -154,8 +156,8 @@ Bei ungültigen Eingaben: Status 400 mit Body `{ "errors": [...] }` (Format von 
 - **URL-Allowlist:** Links werden mit `new URL()` geparst. Erlaubt sind nur:
   - Protokoll `https:`
   - keine Zugangsdaten in der URL (`username` und `password` müssen leer sein)
-  - Hostname exakt in dieser Liste: `youtube.com`, `www.youtube.com`, `m.youtube.com`, `youtu.be`, `tiktok.com`, `www.tiktok.com`, `vm.tiktok.com`, `medal.tv`, `www.medal.tv`
-  - (Noch prüfen: ob TikTok beim Teilen auch `vt.tiktok.com`-Links erzeugt. Falls ja, ergänzen.)
+  - kein eigener Port (`port` muss leer sein; der Standard-Port 443 wird vom Parser entfernt)
+  - Hostname exakt in dieser Liste: `youtube.com`, `www.youtube.com`, `m.youtube.com`, `youtu.be`
 - Niemals `startsWith` oder `includes` auf den ganzen Link anwenden, da Tricks wie `youtube.com.boese-seite.de` oder `youtube.com@boese-seite.de` sonst durchkommen.
 - **Validierung doppelt:** Im Frontend für die Nutzerfreundlichkeit, im Backend als eigentliche Sicherheitsschicht. Das Backend vertraut dem Frontend nie. Nur validierte Daten (`matchedData`) gehen an die Services.
 - **Eingaben begrenzen:** `game` und `platform` nur aus festen Werten, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
@@ -168,20 +170,20 @@ Bei ungültigen Eingaben: Status 400 mit Body `{ "errors": [...] }` (Format von 
 
 ## Videovorschau
 
-Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-Schnittstellen der Plattformen nutzen (Titel und Thumbnail).
+Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-Schnittstelle von YouTube nutzen (Titel und Thumbnail).
 
 ## Fahrplan
 
 1. Projektstruktur, Git-Repo, `.gitignore`, README-Grundgerüst
 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Dummy-Antwort (Demo-Modus)
-3. Validierung: URL-Allowlist (schreibe ich selbst) und Eingabeprüfung mit express-validator, mit Tests in Vitest
+3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests in Vitest
    - → **Ziel für die Bewerbung: Schritte 1 bis 3 auf GitHub**
 4. KI-Anbindung mit Gemini in `aiService.ts` auf Basis der Beschreibung, Antwort im oben definierten JSON-Format
    - 4b. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
 5. Frontend: Formular und Ergebnisanzeige (inkl. Hinweis, ob das Video analysiert wurde). Formulare in React habe ich im Studium noch nicht vertieft (Blatt 11 war optional). Hier besonders gründlich erklären.
 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 7. Videovorschau per oEmbed
-8. README mit Beschreibung, Screenshots, Setup-Anleitung und Erklärung der Sicherheitsentscheidungen (inkl. warum Videoanalyse nur bei YouTube)
+8. README mit Beschreibung, Screenshots, Setup-Anleitung und Erklärung der Sicherheitsentscheidungen (inkl. warum nur YouTube-Links erlaubt sind)
 
 ## Design
 
