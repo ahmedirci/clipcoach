@@ -182,13 +182,25 @@ Statuscodes:
 - **Sprache:** Die Vorschläge kommen in derselben Sprache wie die Beschreibung.
 - **KI-Antwort nicht blind vertrauen:** Gemini bekommt ein JSON-Schema vorgegeben. Die Antwort wird trotzdem im Backend geprüft (Typen, Anzahl, Plattformen), bevor sie an den Client geht. Reihenfolge und Plattformen bestimmt der Request, nicht die KI; zu viele Einträge werden gekürzt, Titel bei TikTok und Instagram verworfen.
 - **Tests schicken nie echte KI-Anfragen:** `vitest.config.ts` leert `GEMINI_API_KEY` für alle Tests. Tests für die Gemini-Anbindung ersetzen das SDK mit `vi.mock("@google/genai")` und setzen einen Fake-Key mit `vi.stubEnv`.
-- Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Spiel, Plattformen, gewünschte Anzahl, Clip-Beschreibung und (ab Version 2) der öffentliche YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
+- Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Spiel, Plattformen, gewünschte Anzahl, Clip-Beschreibung und (ab Version 2) der bereinigte YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
 
-## Videoanalyse (Version 2)
+## Videoanalyse (Version 2, Schritt 4c)
 
-- Gemini kann öffentliche YouTube-Videos direkt über den Link analysieren (Bild und Ton). Unser Server lädt dabei nichts herunter, Google holt das Video selbst.
-- Nur öffentliche Videos funktionieren, nicht privat oder nicht gelistet. Schlägt die Analyse fehl, fällt das Backend auf die Beschreibung zurück (`source: "description"`).
-- Nur Links, die die Allowlist bestanden haben, werden an Gemini übergeben.
+- Gemini kann YouTube-Videos direkt über den Link analysieren (Bild und Ton). Unser Server lädt dabei nichts herunter, Google holt das Video selbst. Das Video geht als eigener Teil (`fileData.fileUri`) mit, nicht im Prompt-Text.
+- **Welche Videos funktionieren:** Laut Google-Doku nur öffentliche. Im Test am 21.11.2026 funktionierte auch ein nicht gelistetes Video; darauf verlassen wir uns nicht (Funktion ist bei Google „Preview“). Ein nicht existierendes Video ergab `403 PERMISSION_DENIED`.
+- **Bereinigter Link:** `extractYouTubeVideoId` (in `urlValidation.ts`) holt die 11-stellige Video-ID aus `watch?v=`, `youtu.be/`, `/shorts/`, `/live/` und `/embed/`. An Gemini geht nur `https://www.youtube.com/watch?v=ID`. Alle anderen Parameter fallen weg, insbesondere `si=...`, über den YouTube nachvollziehen kann, wer den Link geteilt hat.
+- **Ablauf mit Fallback** (alles im Service, Router und API-Format unverändert):
+  1. Versuch mit Video und Beschreibung → `source: "video"`.
+  2. Schlägt er fehl (privates Video, Timeout, Überlastung, ungültige Antwort …) → Hinweis im Server-Log (`console.warn`), dann 2. Versuch nur mit der Beschreibung → `source: "description"`.
+  - Ausnahme: Bei erschöpftem Kontingent (429) gibt es keinen 2. Versuch, er würde ebenfalls scheitern.
+  - Scheitern beide Versuche, kommt der Fehler des 2. Versuchs beim Router an. Schlimmster Fall: 2 × 30 Sekunden.
+  - `source: "video"` setzt unser Code nur, wenn die Videoanalyse wirklich geklappt hat.
+- **Kontingent sparen:** nur die ersten 3 Minuten (`videoMetadata.endOffset: "180s"`, Shorts sind maximal 3 Minuten lang) in niedriger Auflösung (`mediaResolution: MEDIA_RESOLUTION_LOW`). Gemessen: etwa 89 Tokens pro Sekunde Video, ein 35-Sekunden-Clip also rund 3.100 Tokens. Free Tier: höchstens 8 Stunden YouTube-Video pro Tag.
+- **Schutz vor Trollen** (Beschreibung oder Spiel passen nicht zum Video):
+  - Zusätzliche System-Anweisung im Video-Modus: Das Video ist die einzige Wahrheit über den Inhalt, Beschreibung und Spiel sind nur Hinweise und können absichtlich irreführend sein. Aus der Beschreibung wird nur die Sprache übernommen.
+  - Das JSON-Schema bekommt im Video-Modus das Feld `videoContent`, das die KI per `propertyOrdering` **zuerst** ausfüllen muss (was ist im Video zu sehen?). Erst danach schreibt sie die Vorschläge. `videoContent` wird nur intern genutzt und nicht an den Client geschickt.
+  - Gemessen am 21.11.2026 (Overwatch-Clip mit Minecraft-Beschreibung): nur mit Anweisung 2 von 3 Durchläufen richtig, mit `videoContent` 3 von 3.
+- Nur Links, die die Allowlist bestanden haben und eine Video-ID enthalten, werden an Gemini übergeben.
 - **Warum nur YouTube-Links erlaubt sind (TikTok und Medal.tv bewusst nicht):**
   - Gemini kann nur YouTube-Links direkt analysieren. Für andere Anbieter müsste der Server Clips herunterladen und hochladen. Das widerspricht der Sicherheitsentscheidung „keine Uploads, keine eigenen Video-Downloads“ und ist bei TikTok auch rechtlich heikel.
   - Ohne Videoanalyse würden die Vorschläge nur auf der Beschreibung beruhen. Nutzer könnten dann beliebige fremde Clips mit unpassenden Beschreibungen kombinieren und Vorschau und Ergebnisse zum Trollen missbrauchen.
@@ -202,6 +214,7 @@ Statuscodes:
   - keine Zugangsdaten in der URL (`username` und `password` müssen leer sein)
   - kein eigener Port (`port` muss leer sein; der Standard-Port 443 wird vom Parser entfernt)
   - Hostname exakt in dieser Liste: `youtube.com`, `www.youtube.com`, `m.youtube.com`, `youtu.be`
+  - der Link muss auf ein **einzelnes Video** zeigen (Video-ID mit genau 11 Zeichen aus Buchstaben, Ziffern, `-` und `_`). Kanäle, Playlists und die Startseite werden mit eigener Meldung abgelehnt: „Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist.“
 - Niemals `startsWith` oder `includes` auf den ganzen Link anwenden, da Tricks wie `youtube.com.boese-seite.de` oder `youtube.com@boese-seite.de` sonst durchkommen.
 - **Validierung doppelt:** Im Frontend für die Nutzerfreundlichkeit, im Backend als eigentliche Sicherheitsschicht. Das Backend vertraut dem Frontend nie. Nur validierte Daten (`matchedData`) gehen an die Services.
 - **Eingaben begrenzen:** `game` und `platforms` nur aus festen Werten (`platforms` ohne Duplikate), `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).

@@ -9,10 +9,10 @@ ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket Le
 - [x] 1. Projektstruktur, Git-Repo, `.gitignore`, README-Grundgerüst
 - [x] 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Beispieldaten (Demo-Modus)
 - [x] 3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests
-- [ ] 4. KI-Anbindung
+- [x] 4. KI-Anbindung
   - [x] 4a. Mehrere Plattformen und einstellbare Anzahl der Vorschläge (Demo-Modus)
   - [x] 4b. Anbindung an Google Gemini auf Basis der Beschreibung
-  - [ ] 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
+  - [x] 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
 - [ ] 5. Frontend: Formular und Ergebnisanzeige
 - [ ] 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 - [ ] 7. Videovorschau per oEmbed
