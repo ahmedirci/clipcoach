@@ -117,12 +117,14 @@ Request:
   "url": "https://www.youtube.com/watch?v=...",
   "platforms": ["tiktok | instagram | youtube-shorts", "..."],
   "description": "Kurze Beschreibung des Clips",
-  "counts": { "hooks": 3, "captions": 1, "hashtags": 5, "titles": 2 }
+  "counts": { "hooks": 3, "captions": 1, "hashtags": 5, "titles": 2 },
+  "agent": "Neon"
 }
 ```
 
 - `platforms`: mindestens eine Plattform, nur feste Werte, keine doppelten Einträge.
 - `counts`: Pflichtfeld, gewünschte Anzahl pro Kategorie als ganze Zahl von 1 bis zum Höchstwert. Gilt für jede gewählte Plattform gleich. Das Frontend füllt sinnvolle Standardwerte vor.
+- `agent`: **optional**, der Agent, den der Nutzer im Clip spielt. Nur Werte aus `AGENTS` in `Resources.ts` (30 Agents, Schreibweise wie auf playvalorant.com/de-de/agents, Stand 21.11.2026, z. B. `"KAY/O"`). Fehlt das Feld, wird kein Agent genannt. `""` oder `null` werden abgelehnt: „kein Agent“ heißt, das Feld wird nicht mitgeschickt. Neue Agents müssen in der Liste ergänzt werden.
 
 | Kategorie | Höchstwert |
 | --- | --- |
@@ -198,7 +200,8 @@ Statuscodes:
   - Ausnahme: Bei erschöpftem Kontingent (429) gibt es keinen 2. Versuch, er würde ebenfalls scheitern.
   - Scheitern beide Versuche, kommt der Fehler des 2. Versuchs beim Router an. Schlimmster Fall: 2 × 30 Sekunden.
   - `source: "video"` setzt unser Code nur, wenn die Videoanalyse wirklich geklappt hat.
-- **Kontingent sparen:** nur die ersten 3 Minuten (`videoMetadata.endOffset: "180s"`, Shorts sind maximal 3 Minuten lang) in niedriger Auflösung (`mediaResolution: MEDIA_RESOLUTION_LOW`). Gemessen: etwa 89 Tokens pro Sekunde Video, ein 35-Sekunden-Clip also rund 3.100 Tokens. Free Tier: höchstens 8 Stunden YouTube-Video pro Tag.
+- **Kontingent sparen:** nur die ersten 3 Minuten (`videoMetadata.endOffset: "180s"`, Shorts sind maximal 3 Minuten lang). Gemessen: etwa 89 Tokens pro Sekunde Video, ein 35-Sekunden-Clip also rund 3.100 Tokens. Free Tier: höchstens 8 Stunden YouTube-Video pro Tag.
+- **Auflösung:** `mediaResolution: MEDIA_RESOLUTION_LOW` ist gesetzt, hat bei YouTube-Links aber laut Messung vom 21.11.2026 **keine Wirkung**: niedrige, mittlere und hohe Auflösung ergaben exakt dieselbe Tokenzahl (3.204) und dieselben Erkennungsfehler. Die Einstellung bleibt drin, weil sie nicht schadet und bei anderen Videoquellen Kontingent sparen würde.
 - **Schutz vor Trollen** (Beschreibung passt nicht zum Video):
   - Zusätzliche System-Anweisung im Video-Modus: Das Video ist die einzige Wahrheit über den Inhalt, die Beschreibung ist nur ein Hinweis und kann absichtlich irreführend sein. Aus der Beschreibung wird nur die Sprache übernommen. Zeigt das Video kein Valorant, schreibt die KI über das Spiel, das wirklich zu sehen ist.
   - Das JSON-Schema bekommt im Video-Modus das Feld `videoContent`, das die KI per `propertyOrdering` **zuerst** ausfüllen muss (was ist im Video zu sehen?). Erst danach schreibt sie die Vorschläge. `videoContent` wird nur intern genutzt und nicht an den Client geschickt.
@@ -208,6 +211,39 @@ Statuscodes:
   - Gemini kann nur YouTube-Links direkt analysieren. Für andere Anbieter müsste der Server Clips herunterladen und hochladen. Das widerspricht der Sicherheitsentscheidung „keine Uploads, keine eigenen Video-Downloads“ und ist bei TikTok auch rechtlich heikel.
   - Ohne Videoanalyse würden die Vorschläge nur auf der Beschreibung beruhen. Nutzer könnten dann beliebige fremde Clips mit unpassenden Beschreibungen kombinieren und Vorschau und Ergebnisse zum Trollen missbrauchen.
 - Videoanalyse verbraucht deutlich mehr vom kostenlosen Kontingent als Text. Rate Limiting ist hier besonders wichtig.
+
+## Was die KI im Valorant-Clip zuverlässig erkennt (Schritt 4d)
+
+Messung am 21.11.2026 mit einem echten Clip (Nutzer spielt Neon; Mate stirbt am Anfang; Vandal verfehlt, Wechsel zur Phantom; Kill gegen Omen; Spike-Plant als Angreifer; Kill gegen KAY/O; Runde gewonnen), `gemini-3.5-flash-lite`, je 3 Durchläufe:
+
+| Information | Ergebnis | Woher sie deshalb kommt |
+| --- | --- | --- |
+| Waffen und Waffenwechsel | 3 von 3 richtig (Vandal → Phantom), auch ohne Hinweise zu Magazingrößen | Video |
+| Anzahl Kills | 3 von 3 richtig | Video |
+| Seite und Spike-Plant | 3 von 3 richtig | Video |
+| Highlight-Moment | gut brauchbar | Video |
+| Rundenausgang | meist „unsicher“, einmal richtig geraten | nur wenn eindeutig erkennbar |
+| Map | widersprüchlich (Haven, Haven, Lotus) | nur aus der Beschreibung |
+| Eigener Agent | 3 von 3 **falsch**: hielt den Gegner Omen für den Agent des Spielers | nur aus dem Feld `agent` |
+
+Weitere Befunde:
+
+- Das Modell kennt nur 25 Agents (Stand Mitte 2024). Hush, Miks, Tejo, Veto und Waylay kennt es nicht. Deshalb kommt der Agent als Text aus unserer Liste, das Modell muss ihn nicht kennen.
+- Bei Overwatch (vor der Umstellung) lag die KI beim eigenen Charakter ebenfalls immer falsch, mit erfundener Begründung. Ein stärkeres Modell (`gemini-3.6-flash`) war nicht besser und 25-mal langsamer.
+- Hinweise zu Magazingrößen im Prompt haben nichts verbessert (Waffen waren schon richtig), die Map wurde dadurch sogar eine andere. Deshalb keine Waffen-Hinweise im Prompt.
+
+Umsetzung:
+
+- `videoContent` fragt nur nach dem Zuverlässigen: Spiel, Waffen (mit Wechsel), Kills, Spike, Seite, bestes Highlight. Die Hooks sollen um das Highlight gebaut werden.
+- Regel in der System-Anweisung: eigenen Agent nie raten; andere Agents und Map nur, wenn sie in der Beschreibung stehen; Rundenausgang nur, wenn eindeutig erkennbar.
+- **Die Regel allein hat nicht gereicht.** Ohne gewählten Agent schrieb die KI trotzdem „Diesen Omen Play musst du sehen!“, und einmal nannte sie ungefragt die Map. Deshalb steht im Prompt bei den Nutzerdaten immer ausdrücklich:
+  - mit Agent: `Player's agent (selected by the user, always correct): Neon`
+  - ohne Agent: `Player's agent: not specified. Do not name any agent unless it is mentioned in the description.`
+  - immer: `Map: not specified. Do not name any map unless it is mentioned in the description.`
+  - Ergebnis danach: ohne Agent 3 von 3 ohne erfundene Agents oder Maps; mit Neon wird Neon genannt; Troll-Test (Minecraft-Beschreibung) 3 von 3 richtig.
+- Platzhalter wie `[Agent]` werden bewusst nicht verwendet: Ohne Auswahl bleiben die Texte allgemein, damit man sie direkt kopieren kann. Waffen brauchen keine Platzhalter, sie werden zuverlässig erkannt.
+- Bekannte Schwäche: Bei sehr knappen Beschreibungen („Eine Runde von gestern“) werden die Hooks eher allgemein, und die Caption übernimmt teils die Beschreibung. Geplante Verbesserung: kurzer Valorant-Kontext (Begriffe, typische Highlights, übliche Hashtags) aus Stichpunkten des Nutzers.
+- Lehre für Tests: Agent-Namen in Texten nur als ganze Wörter suchen, sonst steckt „Omen“ in „Moment“.
 
 ## Sicherheitsregeln (immer einhalten)
 
@@ -220,7 +256,7 @@ Statuscodes:
   - der Link muss auf ein **einzelnes Video** zeigen (Video-ID mit genau 11 Zeichen aus Buchstaben, Ziffern, `-` und `_`). Kanäle, Playlists und die Startseite werden mit eigener Meldung abgelehnt: „Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist.“
 - Niemals `startsWith` oder `includes` auf den ganzen Link anwenden, da Tricks wie `youtube.com.boese-seite.de` oder `youtube.com@boese-seite.de` sonst durchkommen.
 - **Validierung doppelt:** Im Frontend für die Nutzerfreundlichkeit, im Backend als eigentliche Sicherheitsschicht. Das Backend vertraut dem Frontend nie. Nur validierte Daten (`matchedData`) gehen an die Services.
-- **Eingaben begrenzen:** `platforms` nur aus festen Werten und ohne Duplikate, `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
+- **Eingaben begrenzen:** `platforms` nur aus festen Werten und ohne Duplikate, `agent` (optional) nur aus der festen Agent-Liste, `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
 - **API-Key schützen:** Der KI-API-Key steht nur in `backend/.env`. Die `.env` steht in der `.gitignore` und wird nie committet. Lege eine `backend/.env.example` ohne echten Key an. Der Key wird niemals im Frontend verwendet.
 - **Rate Limiting** auf `/api/generate` mit express-rate-limit, damit niemand das kostenlose Kontingent aufbraucht.
 - **helmet** für sichere HTTP-Header.
@@ -242,7 +278,8 @@ Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-S
    - 4a. Neues Request-/Response-Format (mehrere Plattformen, `counts`, `captions`, Titel nur bei YouTube Shorts) mit Validierung und Tests, zunächst im Demo-Modus
    - 4b. Gemini-Anbindung in `aiService.ts` auf Basis der Beschreibung: Prompt, JSON-Schema, Prüfung der KI-Antwort, eigene Fehlerklassen, 503 bei erschöpftem Kontingent
    - 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
-   - 4d. Fokus auf Valorant und Erkennungsgenauigkeit: Spielauswahl entfernen, dann messen, was die KI aus dem Video zuverlässig erkennt (Agent, Waffen, Kills, Spike, Highlight), und je nach Ergebnis Angaben vom Nutzer oder Platzhalter wie `[Agent]` verwenden
+   - 4d. Fokus auf Valorant und Erkennungsgenauigkeit: Spielauswahl entfernt, gemessen, was die KI zuverlässig erkennt, optionales Feld `agent`, Agent und Map nur vom Nutzer (siehe „Was die KI im Valorant-Clip zuverlässig erkennt“)
+   - 4e. (geplant) Valorant-Kontext für bessere Hooks: Begriffe, typische Highlights und übliche Hashtags aus Stichpunkten des Nutzers
 5. Frontend: Formular und Ergebnisanzeige (inkl. Hinweis, ob das Video analysiert wurde). Formulare in React habe ich im Studium noch nicht vertieft (Blatt 11 war optional). Hier besonders gründlich erklären.
 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 7. Videovorschau per oEmbed
