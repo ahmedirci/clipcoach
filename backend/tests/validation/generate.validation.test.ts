@@ -13,7 +13,7 @@ vi.mock("../../src/services/aiService.js", () => ({
 }));
 
 const validBody = {
-    url: "https://www.youtube.com/watch?v=abc123",
+    url: "https://www.youtube.com/watch?v=abc123DEF45",
     game: "fortnite",
     platforms: ["tiktok"],
     description: "1 gegen 4 mit wenig Leben gewonnen",
@@ -67,7 +67,7 @@ test("POST /api/generate, zusätzliche Properties im Body werden ignoriert", asy
 test("POST /api/generate, Leerzeichen um Link und Beschreibung werden entfernt", async () => {
     const response = await postGenerate({
         ...validBody,
-        url: "  https://www.youtube.com/watch?v=abc123  ",
+        url: "  https://www.youtube.com/watch?v=abc123DEF45  ",
         description: "  1 gegen 4 mit wenig Leben gewonnen  ",
     });
 
@@ -112,8 +112,8 @@ test("POST /api/generate, fehlende URL", async () => {
 
 test.each([
     ["eine Zahl", 123],
-    ["ein Array", ["https://www.youtube.com/watch?v=abc123"]],
-    ["ein Objekt", { href: "https://www.youtube.com/watch?v=abc123" }],
+    ["ein Array", ["https://www.youtube.com/watch?v=abc123DEF45"]],
+    ["ein Objekt", { href: "https://www.youtube.com/watch?v=abc123DEF45" }],
     ["null", null],
     ["ein leerer Text", ""],
     ["nur Leerzeichen", "   "],
@@ -127,16 +127,39 @@ test("POST /api/generate, URL länger als 2048 Zeichen", async () => {
 });
 
 test.each([
-    "http://www.youtube.com/watch?v=abc123",
+    "http://www.youtube.com/watch?v=abc123DEF45",
     "javascript:alert(1)",
-    "https://youtube.com.boese-seite.de/watch?v=abc123",
-    "https://youtube.com@boese-seite.de/watch?v=abc123",
-    "https://nutzer:passwort@www.youtube.com/watch?v=abc123",
+    "https://youtube.com.boese-seite.de/watch?v=abc123DEF45",
+    "https://youtube.com@boese-seite.de/watch?v=abc123DEF45",
+    "https://nutzer:passwort@www.youtube.com/watch?v=abc123DEF45",
     "https://boese-seite.de/youtube.com",
     "https://www.tiktok.com/@spieler/video/1234567890",
     "https://medal.tv/games/fortnite/clips/abc123",
 ])("POST /api/generate, Link %s wird abgelehnt", async (url) => {
     expectRejected(await postGenerate({ ...validBody, url }), "url");
+});
+
+test.each([
+    "https://www.youtube.com/",
+    "https://www.youtube.com/@kanalname",
+    "https://www.youtube.com/playlist?list=PLabcdefghijklmnop",
+    "https://www.youtube.com/watch?v=abc123",
+])("POST /api/generate, YouTube-Link %s ohne einzelnes Video wird mit eigener Meldung abgelehnt", async (url) => {
+    const response = await postGenerate({ ...validBody, url });
+
+    expectRejected(response, "url");
+    expect(response.body.errors[0].msg).toBe(
+        "Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist.",
+    );
+});
+
+test.each([
+    "https://youtu.be/abc123DEF45?si=GeteiltVonJemandem",
+    "https://www.youtube.com/shorts/abc123DEF45",
+    "https://m.youtube.com/watch?v=abc123DEF45&t=30s",
+])("POST /api/generate, Video-Link %s wird angenommen", async (url) => {
+    const response = await postGenerate({ ...validBody, url });
+    expect(response.status).toBe(200);
 });
 
 // ---------- game ----------

@@ -32,3 +32,54 @@ export function isAllowedClipUrl(value: string): boolean {
     }
     return ALLOWED_HOSTNAMES.has(url.hostname);
 }
+
+// Eine YouTube-Video-ID besteht aus genau 11 Zeichen: Buchstaben, Ziffern, "-" und "_"
+const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
+// Pfade, bei denen die Video-ID im zweiten Teil steht, z. B. /shorts/ID
+const VIDEO_PATH_SECTIONS = new Set(["shorts", "live", "embed"]);
+
+/**
+ * Holt die Video-ID aus einem erlaubten YouTube-Link.
+ * Gibt null zurück, wenn der Link nicht erlaubt ist oder auf kein einzelnes Video zeigt
+ * (z. B. Kanal, Playlist oder Startseite).
+ *
+ * Erkannte Formate:
+ *   https://www.youtube.com/watch?v=ID   (auch youtube.com und m.youtube.com)
+ *   https://youtu.be/ID
+ *   https://www.youtube.com/shorts/ID    (ebenso /live/ID und /embed/ID)
+ */
+export function extractYouTubeVideoId(value: string): string | null {
+    // Erst die Allowlist: Nur geprüfte Links werden weiter zerlegt
+    if (!isAllowedClipUrl(value)) {
+        return null;
+    }
+    const url = new URL(value);
+
+    // "/shorts/ID/" wird zu ["shorts", "ID"]. filter(Boolean) entfernt leere Teile,
+    // die durch den Schrägstrich am Anfang oder am Ende entstehen.
+    const segments = url.pathname.split("/").filter(Boolean);
+
+    let candidate: string | null = null;
+    if (url.hostname === "youtu.be" && segments.length === 1) {
+        candidate = segments[0];
+    } else if (segments.length === 1 && segments[0] === "watch") {
+        candidate = url.searchParams.get("v");
+    } else if (segments.length === 2 && VIDEO_PATH_SECTIONS.has(segments[0])) {
+        candidate = segments[1];
+    }
+
+    if (candidate === null || !VIDEO_ID_PATTERN.test(candidate)) {
+        return null;
+    }
+    return candidate;
+}
+
+/**
+ * Baut aus einer Video-ID einen sauberen Link im Standardformat.
+ * Alle anderen Parameter des ursprünglichen Links fallen dabei weg,
+ * z. B. "si=...", über den YouTube nachvollziehen kann, wer den Link geteilt hat.
+ */
+export function toYouTubeWatchUrl(videoId: string): string {
+    return `https://www.youtube.com/watch?v=${videoId}`;
+}

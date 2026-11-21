@@ -3,7 +3,7 @@ import { COUNT_LIMITS, type GenerateRequestResource } from "../../src/Resources.
 import { generateSuggestions } from "../../src/services/aiService.js";
 
 const request: GenerateRequestResource = {
-    url: "https://www.youtube.com/watch?v=abc123",
+    url: "https://www.youtube.com/watch?v=abc123DEF45",
     game: "fortnite",
     platforms: ["tiktok"],
     description: "1 gegen 4 mit wenig Leben gewonnen",

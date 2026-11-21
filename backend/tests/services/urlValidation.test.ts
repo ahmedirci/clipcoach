@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { isAllowedClipUrl } from "../../src/services/urlValidation.js";
+import { extractYouTubeVideoId, isAllowedClipUrl, toYouTubeWatchUrl } from "../../src/services/urlValidation.js";
 
 // test.each führt denselben Test für jeden Eintrag der Liste aus.
 // %s im Testnamen wird durch den jeweiligen Link ersetzt.
@@ -85,4 +85,59 @@ test.each([
 
 test("isAllowedClipUrl, anderer Port als 443 wird abgelehnt", () => {
     expect(isAllowedClipUrl("https://www.youtube.com:8443/watch?v=abc123")).toBe(false);
+});
+
+// ---------- Video-ID aus dem Link holen ----------
+
+test.each([
+    "https://www.youtube.com/watch?v=abc123DEF45",
+    "https://youtube.com/watch?v=abc123DEF45",
+    "https://m.youtube.com/watch?v=abc123DEF45",
+    "https://www.youtube.com/watch?v=abc123DEF45&t=30s",
+    "https://www.youtube.com/watch?v=abc123DEF45&list=PLabcdefghijklmnop",
+    "https://youtu.be/abc123DEF45",
+    "https://youtu.be/abc123DEF45?si=GeteiltVonJemandem",
+    "https://www.youtube.com/shorts/abc123DEF45",
+    "https://www.youtube.com/shorts/abc123DEF45/",
+    "https://www.youtube.com/shorts/abc123DEF45?si=GeteiltVonJemandem",
+    "https://www.youtube.com/live/abc123DEF45",
+    "https://www.youtube.com/embed/abc123DEF45",
+])("extractYouTubeVideoId, %s ergibt die Video-ID", (url) => {
+    expect(extractYouTubeVideoId(url)).toBe("abc123DEF45");
+});
+
+test("extractYouTubeVideoId, Bindestrich und Unterstrich gehören zur ID", () => {
+    expect(extractYouTubeVideoId("https://youtu.be/a-b_c-d_e-f")).toBe("a-b_c-d_e-f");
+});
+
+test.each([
+    // kein einzelnes Video
+    "https://www.youtube.com/",
+    "https://www.youtube.com/@kanalname",
+    "https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv",
+    "https://www.youtube.com/playlist?list=PLabcdefghijklmnop",
+    "https://www.youtube.com/watch",
+    "https://www.youtube.com/watch?list=PLabcdefghijklmnop",
+    "https://www.youtube.com/shorts/",
+    "https://youtu.be/",
+    // ID hat das falsche Format
+    "https://www.youtube.com/watch?v=abc123",
+    "https://www.youtube.com/watch?v=abc123DEF456",
+    "https://www.youtube.com/watch?v=abc123DEF4!",
+    "https://youtu.be/abc123DEF45/extra",
+    "https://www.youtube.com/shorts/abc123DEF45/extra",
+    // ID an falscher Stelle
+    "https://youtu.be/watch?v=abc123DEF45",
+    "https://www.youtube.com/abc123DEF45",
+    // nicht erlaubte Links, auch wenn eine ID darin steht
+    "http://www.youtube.com/watch?v=abc123DEF45",
+    "https://boese-seite.de/watch?v=abc123DEF45",
+    "https://youtube.com.boese-seite.de/watch?v=abc123DEF45",
+    "kein link",
+])("extractYouTubeVideoId, %s ergibt keine Video-ID", (url) => {
+    expect(extractYouTubeVideoId(url)).toBeNull();
+});
+
+test("toYouTubeWatchUrl, baut einen sauberen Link im Standardformat", () => {
+    expect(toYouTubeWatchUrl("abc123DEF45")).toBe("https://www.youtube.com/watch?v=abc123DEF45");
 });

@@ -6,7 +6,7 @@ test("POST /api/generate, liefert Demo-Daten pro Plattform im richtigen Format",
     const response = await supertest(app)
         .post("/api/generate")
         .send({
-            url: "https://www.youtube.com/watch?v=abc123",
+            url: "https://www.youtube.com/watch?v=abc123DEF45",
             game: "fortnite",
             platforms: ["tiktok", "youtube-shorts"],
             description: "1 gegen 4 mit wenig Leben gewonnen",

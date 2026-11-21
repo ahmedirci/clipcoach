@@ -2,7 +2,7 @@ import express from "express";
 import { body, matchedData, validationResult } from "express-validator";
 import { COUNT_LIMITS, GAMES, PLATFORMS, type GenerateRequestResource } from "../Resources.js";
 import { AiRateLimitError, AiUnavailableError, generateSuggestions } from "../services/aiService.js";
-import { isAllowedClipUrl } from "../services/urlValidation.js";
+import { extractYouTubeVideoId, isAllowedClipUrl } from "../services/urlValidation.js";
 
 export const generateRouter = express.Router();
 
@@ -27,7 +27,10 @@ const postGenerateValidators = [
         .isString().bail()
         .trim()
         .isLength({ min: 1, max: 2048 }).bail()
-        .custom((value: string) => isAllowedClipUrl(value)),
+        .custom((value: string) => isAllowedClipUrl(value)).bail()
+        // Eigene Meldung, wenn der Link zwar zu YouTube führt, aber auf kein einzelnes Video
+        .custom((value: string) => extractYouTubeVideoId(value) !== null)
+        .withMessage("Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist."),
     oneOf("game", GAMES, "Bitte wähle ein unterstütztes Spiel."),
 
     // platforms: eine Liste mit 1 bis 3 Einträgen, ohne doppelte Einträge ...
