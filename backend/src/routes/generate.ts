@@ -1,6 +1,6 @@
 import express from "express";
 import { body, matchedData, validationResult } from "express-validator";
-import { GAMES, PLATFORMS, type GenerateRequestResource } from "../Resources.js";
+import { COUNT_LIMITS, GAMES, PLATFORMS, type GenerateRequestResource } from "../Resources.js";
 import { generateSuggestions } from "../services/aiService.js";
 import { isAllowedClipUrl } from "../services/urlValidation.js";
 
@@ -15,6 +15,13 @@ const string500 = (field: string, message: string) =>
 const oneOf = (field: string, values: readonly string[], message: string) =>
     body(field, message).isString().bail().isIn(values);
 
+// Ganze Zahl von 1 bis max. Wir prüfen den Typ selbst:
+// So kommen weder Texte wie "3" noch Arrays wie [3] durch, nur echte Zahlen.
+// Nach "typeof value === 'number'" weiß TypeScript, dass value eine Zahl ist.
+const countFrom1To = (field: string, max: number) =>
+    body(field, `Bitte gib für ${field} eine ganze Zahl von 1 bis ${max} an.`)
+        .custom((value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= max);
+
 const postGenerateValidators = [
     body("url", "Bitte gib einen gültigen YouTube-Link an.")
         .isString().bail()
@@ -22,8 +29,20 @@ const postGenerateValidators = [
         .isLength({ min: 1, max: 2048 }).bail()
         .custom((value: string) => isAllowedClipUrl(value)),
     oneOf("game", GAMES, "Bitte wähle ein unterstütztes Spiel."),
-    oneOf("platform", PLATFORMS, "Bitte wähle eine unterstützte Plattform."),
+
+    // platforms: eine Liste mit 1 bis 3 Einträgen, ohne doppelte Einträge ...
+    body("platforms", "Bitte wähle mindestens eine Plattform, jede höchstens einmal.")
+        .isArray({ min: 1, max: PLATFORMS.length }).bail()
+        .custom((values: unknown[]) => new Set(values).size === values.length),
+    // ... und jeder einzelne Eintrag (".*") muss eine erlaubte Plattform sein
+    oneOf("platforms.*", PLATFORMS, "Bitte wähle nur unterstützte Plattformen."),
+
     string500("description", "Die Beschreibung muss zwischen 1 und 500 Zeichen lang sein."),
+
+    countFrom1To("counts.hooks", COUNT_LIMITS.hooks),
+    countFrom1To("counts.captions", COUNT_LIMITS.captions),
+    countFrom1To("counts.hashtags", COUNT_LIMITS.hashtags),
+    countFrom1To("counts.titles", COUNT_LIMITS.titles),
 ];
 
 generateRouter.post("/", postGenerateValidators, async (req: express.Request, res: express.Response) => {

@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import supertest from "supertest";
 import { app } from "../../src/app.js";
-import { GAMES, PLATFORMS } from "../../src/Resources.js";
+import { COUNT_LIMITS, GAMES, PLATFORMS } from "../../src/Resources.js";
 import { generateSuggestions } from "../../src/services/aiService.js";
 
 // Der Service wird durch eine Attrappe ersetzt. So testen wir nur die Validierung
@@ -15,17 +15,15 @@ vi.mock("../../src/services/aiService.js", () => ({
 const validBody = {
     url: "https://www.youtube.com/watch?v=abc123",
     game: "fortnite",
-    platform: "tiktok",
+    platforms: ["tiktok"],
     description: "1 gegen 4 mit wenig Leben gewonnen",
+    counts: { hooks: 3, captions: 1, hashtags: 5, titles: 2 },
 };
 
 beforeEach(() => {
     vi.mocked(generateSuggestions).mockReset();
     vi.mocked(generateSuggestions).mockResolvedValue({
-        hooks: ["Hook"],
-        caption: "Caption",
-        hashtags: ["#gaming"],
-        titles: ["Titel"],
+        results: [{ platform: "tiktok", hooks: ["Hook"], captions: ["Caption"], hashtags: ["#gaming"], titles: [] }],
         source: "description",
     });
 });
@@ -53,10 +51,16 @@ test("POST /api/generate, gültige Eingaben werden angenommen", async () => {
 });
 
 test("POST /api/generate, zusätzliche Properties im Body werden ignoriert", async () => {
-    const response = await postGenerate({ ...validBody, isAdmin: true, apiKey: "geheim" });
+    const response = await postGenerate({
+        ...validBody,
+        isAdmin: true,
+        apiKey: "geheim",
+        counts: { ...validBody.counts, extra: 99 },
+    });
 
     expect(response.status).toBe(200);
-    // toHaveBeenCalledWith vergleicht exakt: Zusätzliche Felder würden den Test scheitern lassen
+    // toHaveBeenCalledWith vergleicht exakt: Zusätzliche Felder würden den Test scheitern lassen.
+    // Das gilt auch für das zusätzliche Feld innerhalb von counts.
     expect(generateSuggestions).toHaveBeenCalledWith(validBody);
 });
 
@@ -84,7 +88,16 @@ test("POST /api/generate, leerer Body wird mit Fehlern für alle Felder abgelehn
 
     expect(response.status).toBe(400);
     const fields = response.body.errors.map((error: { path: string }) => error.path);
-    expect(fields).toEqual(["url", "game", "platform", "description"]);
+    expect(fields).toEqual([
+        "url",
+        "game",
+        "platforms",
+        "description",
+        "counts.hooks",
+        "counts.captions",
+        "counts.hashtags",
+        "counts.titles",
+    ]);
     expect(generateSuggestions).not.toHaveBeenCalled();
 });
 
@@ -147,25 +160,47 @@ test.each([
     expectRejected(await postGenerate({ ...validBody, game }), "game");
 });
 
-// ---------- platform ----------
+// ---------- platforms ----------
 
-test.each(PLATFORMS)("POST /api/generate, Plattform %s wird angenommen", async (platform) => {
-    const response = await postGenerate({ ...validBody, platform });
+test.each(PLATFORMS)("POST /api/generate, Plattform %s allein wird angenommen", async (platform) => {
+    const response = await postGenerate({ ...validBody, platforms: [platform] });
     expect(response.status).toBe(200);
 });
 
-test("POST /api/generate, fehlende Plattform", async () => {
-    expectRejected(await postGenerate({ ...validBody, platform: undefined }), "platform");
+test("POST /api/generate, alle drei Plattformen zusammen werden angenommen", async () => {
+    const platforms = ["tiktok", "instagram", "youtube-shorts"];
+    const response = await postGenerate({ ...validBody, platforms });
+
+    expect(response.status).toBe(200);
+    expect(generateSuggestions).toHaveBeenCalledWith({ ...validBody, platforms });
 });
 
+test("POST /api/generate, fehlende Plattformen", async () => {
+    expectRejected(await postGenerate({ ...validBody, platforms: undefined }), "platforms");
+});
+
+// Fehler, die die Liste als Ganzes betreffen (Pfad "platforms")
+test.each([
+    ["eine leere Liste", []],
+    ["ein Text statt einer Liste", "tiktok"],
+    ["eine Zahl", 1],
+    ["null", null],
+    ["ein Objekt", { 0: "tiktok" }],
+    ["eine Liste mit doppeltem Eintrag", ["tiktok", "tiktok"]],
+    ["eine Liste mit mehr als drei Einträgen", ["tiktok", "instagram", "youtube-shorts", "tiktok"]],
+])("POST /api/generate, Plattformen sind %s", async (_name, platforms) => {
+    expectRejected(await postGenerate({ ...validBody, platforms }), "platforms");
+});
+
+// Fehler in einem einzelnen Eintrag (Pfad "platforms[1]", also der zweite Eintrag)
 test.each([
     ["eine unbekannte Plattform", "facebook"],
     ["großgeschrieben", "TikTok"],
     ["ein leerer Text", ""],
-    ["ein Array", ["tiktok"]],
+    ["ein verschachteltes Array", ["instagram"]],
     ["eine Zahl", 1],
-])("POST /api/generate, Plattform ist %s", async (_name, platform) => {
-    expectRejected(await postGenerate({ ...validBody, platform }), "platform");
+])("POST /api/generate, zweiter Plattform-Eintrag ist %s", async (_name, secondEntry) => {
+    expectRejected(await postGenerate({ ...validBody, platforms: ["tiktok", secondEntry] }), "platforms[1]");
 });
 
 // ---------- description ----------
@@ -187,4 +222,50 @@ test.each([
     ["ein Array", ["Beschreibung"]],
 ])("POST /api/generate, Beschreibung ist %s", async (_name, description) => {
     expectRejected(await postGenerate({ ...validBody, description }), "description");
+});
+
+// ---------- counts ----------
+
+test("POST /api/generate, Anzahl 1 in jeder Kategorie wird angenommen", async () => {
+    const counts = { hooks: 1, captions: 1, hashtags: 1, titles: 1 };
+    const response = await postGenerate({ ...validBody, counts });
+    expect(response.status).toBe(200);
+});
+
+test("POST /api/generate, Höchstwerte in jeder Kategorie werden angenommen", async () => {
+    const response = await postGenerate({ ...validBody, counts: COUNT_LIMITS });
+    expect(response.status).toBe(200);
+});
+
+test("POST /api/generate, fehlende Anzahl", async () => {
+    const response = await postGenerate({ ...validBody, counts: undefined });
+
+    expectRejected(response, "counts.hooks");
+    expectRejected(response, "counts.captions");
+    expectRejected(response, "counts.hashtags");
+    expectRejected(response, "counts.titles");
+});
+
+test("POST /api/generate, Anzahl ist kein Objekt", async () => {
+    expectRejected(await postGenerate({ ...validBody, counts: 5 }), "counts.hooks");
+});
+
+// Jede Kategorie mit jedem ungültigen Wert testen.
+// flatMap baut daraus eine Liste aller Kombinationen, z. B. ["hooks", "0", 0].
+const countFields = ["hooks", "captions", "hashtags", "titles"] as const;
+const invalidCountCases = countFields.flatMap((field) => [
+    [field, "0", 0],
+    [field, "der Höchstwert + 1", COUNT_LIMITS[field] + 1],
+    [field, "negativ", -1],
+    [field, "eine Kommazahl", 1.5],
+    [field, "ein Text", "1"],
+    [field, "ein Array", [1]],
+    [field, "null", null],
+    [field, "ein Wahrheitswert", true],
+    [field, "nicht vorhanden", undefined],
+] as const);
+
+test.each(invalidCountCases)("POST /api/generate, Anzahl %s ist %s", async (field, _name, value) => {
+    const counts = { ...validBody.counts, [field]: value };
+    expectRejected(await postGenerate({ ...validBody, counts }), `counts.${field}`);
 });
