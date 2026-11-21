@@ -53,6 +53,23 @@ const PLATFORM_NAMES: Record<Platform, string> = {
     "youtube-shorts": "YouTube Shorts",
 };
 
+// Alle Valorant-Waffen laut playvalorant.com/de-de/arsenal (Stand 21.11.2026), ohne Messer.
+// Damit erkennt unser Code Waffen in der Beschreibung (siehe findMentionedWeapons).
+const WEAPONS = [
+    "Bandit", "Classic", "Shorty", "Frenzy", "Ghost", "Sheriff", "Stinger", "Spectre", "Bucky", "Judge",
+    "Bulldog", "Guardian", "Phantom", "Vandal", "Marshal", "Operator", "Ares", "Odin", "Outlaw",
+];
+
+/**
+ * Findet Waffennamen, die in der Beschreibung als ganze Wörter vorkommen (Groß-/Kleinschreibung egal).
+ * Ganze Wörter, damit z. B. "Ghost" nicht in "Ghostbusters" gefunden wird.
+ */
+function findMentionedWeapons(description: string): string[] {
+    // An allem außer Buchstaben und Ziffern trennen: "Odin-Spray" ergibt "odin" und "spray"
+    const words = new Set(description.toLowerCase().split(/[^\p{L}\p{N}]+/u));
+    return WEAPONS.filter((weapon) => words.has(weapon.toLowerCase()));
+}
+
 // Die feste Anweisung an die KI. Sie steht getrennt von den Nutzerdaten
 // (System-Anweisung), damit die Beschreibung sie nicht überschreiben kann.
 // Auf Englisch, damit die KI nicht automatisch zu Deutsch tendiert:
@@ -64,7 +81,7 @@ Rules:
 - Write all suggestions in the same language as the clip description.
 - Create separate suggestions for every requested platform, adapted to the style of that platform.
 - Hooks: short, attention-grabbing lines for the first 3 seconds of the video.
-- Captions: the text posted with the video.
+- Captions: the text posted with the video, without hashtags (hashtags are a separate list).
 - Hashtags: each starts with "#" and contains no spaces. #valorant, #fyp, the platform hashtag and the
   hashtags for agent and rank are added automatically, do not spend items on them. Use in this order:
   1. #valo
@@ -74,7 +91,8 @@ Rules:
   5. only for very strong clips: #4k #insane #prime #vamos
 - Titles: only for YouTube Shorts, short and catchy. For all other platforms return an empty list.
 - Tags: only for YouTube Shorts: 10 to 15 search tags without "#" (spaces allowed), e.g. "valorant ace",
-  the weapons, the highlight type, the agent if given, the map if given or mentioned in the description.
+  the highlight type, the agent if given, the map if given or mentioned in the description,
+  weapons only if mentioned in the description.
   For all other platforms return an empty list.
 - Return exactly the requested number of hooks, captions and titles. Hashtags and tags: up to the requested number.
 - Never use insults, slurs or hate terms, and no empty filler words such as #good.
@@ -87,6 +105,8 @@ Rules:
   and "Player's rank". Never guess them. Name the map only if it is given as "Map" or mentioned in the
   description. Name other agents (teammates, enemies) only if they are mentioned in the description.
   Otherwise write without agent, rank or map names.
+- Weapons: Name weapons only if they are mentioned in the description. Never guess weapons from the
+  video, weapon skins make them look different.
 
 Valorant knowledge:
 - Strong highlight moments, from strongest to weaker: Ace (the player kills all 5 enemies, "ACE" appears
@@ -108,11 +128,13 @@ Video rules (most important):
 - First fill "videoContent" with what you actually see in the video. Then write all suggestions
   so that they match "videoContent". Build the hooks around the best highlight moment.
 - Mention the result of the round only if it is clearly visible in the video.
-- The description is only a hint from the user. It may be wrong or deliberately misleading.
-  If it does not match the video, ignore its content completely and write about what actually
-  happens in the video. If the video does not show Valorant, write about the game that is actually shown.
-- Take only the language from the description: write every suggestion in the language the
-  description is written in.`;
+- The description is a hint from the user. It may be wrong or deliberately misleading.
+  - If it does not match the video (e.g. another game or a completely different situation), ignore its
+    content completely and write about what actually happens in the video. If the video does not show
+    Valorant, write about the game that is actually shown.
+  - If it matches the video, use its details that the video cannot show reliably, such as the weapons,
+    other agents or the map.
+- Always write every suggestion in the language the description is written in.`;
 
 // ============================================================
 // Demo-Modus (ohne API-Key)
@@ -232,6 +254,15 @@ function createPrompt(request: GenerateRequestResource): string {
     } else {
         lines.push("Map: not specified. Do not name any map unless it is mentioned in the description.");
     }
+    // Waffen gibt es nicht als Feld: Sie kommen nur aus der Beschreibung.
+    // Die KI hat Waffen mit Skins im Video falsch erkannt ("Odin" statt Vandal) und mit Video die
+    // Waffen aus der Beschreibung ignoriert. Deshalb sucht unser Code sie selbst und nennt sie ausdrücklich.
+    const weapons = findMentionedWeapons(request.description);
+    if (weapons.length > 0) {
+        lines.push(`Weapons used (from the description, use them in the suggestions): ${weapons.join(", ")}`);
+    } else {
+        lines.push("Weapons: Do not name any weapon unless it is mentioned in the description.");
+    }
     return lines.join("\n");
 }
 
@@ -253,13 +284,13 @@ function createResponseSchema(request: GenerateRequestResource, withVideo: boole
     const { counts } = request;
     const videoContent = {
         type: "string",
-        // Gefragt wird nur, was die KI in Messungen zuverlässig erkannt hat
-        // (Waffen, Kills, Spike, Seite), nicht Agents oder Map (siehe CLAUDE.md).
-        description: "Based only on the video: which game is shown; which weapons the player uses " +
-            "(including weapon switches); how many kills the player makes (use the kill counter at the top " +
-            "right if visible); whether the player plants or defuses the spike; attacking or defending; " +
-            "which highlight type from the Valorant knowledge occurs (or none); and the single best " +
-            "highlight moment for a hook.",
+        // Gefragt wird nur, was die KI in Messungen zuverlässig erkannt hat (Kills, Spike, Seite,
+        // Highlight), nicht Agents, Map oder Waffen (Skins täuschen, siehe CLAUDE.md).
+        description: "Based only on the video: which game is shown; how many kills the player makes " +
+            "(use the kill counter at the top right if visible); whether the player plants or defuses the " +
+            "spike; attacking or defending; which highlight type from the Valorant knowledge occurs (or none); " +
+            "and the single best highlight moment for a hook. Do not identify weapons, agents or maps " +
+            "from the video.",
     };
     return {
         type: "object",

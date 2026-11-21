@@ -154,13 +154,74 @@ test("generateSuggestions, videoContent fragt nach dem, was zuverlässig erkannt
     await generateSuggestions(request);
 
     const { description } = callParams(0).config.responseJsonSchema.properties.videoContent;
-    expect(description).toContain("weapons");
     expect(description).toContain("kills");
     expect(description).toContain("spike");
     expect(description).toContain("highlight");
-    // Agents und Map erkennt die KI nicht zuverlässig, danach wird nicht gefragt
-    expect(description).not.toContain("agent");
-    expect(description).not.toContain("map");
+    // Waffen, Agents und Map erkennt die KI nicht zuverlässig: Sie werden ausdrücklich ausgeschlossen
+    expect(description).not.toContain("which weapons");
+    expect(description).toContain("Do not identify weapons, agents or maps");
+});
+
+test("generateSuggestions, Video-Regel: passende Beschreibung liefert Details, unpassende nur die Sprache", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const { systemInstruction } = callParams(0).config;
+    expect(systemInstruction).toContain("If it does not match the video");
+    expect(systemInstruction).toContain("If it matches the video, use its details");
+    expect(systemInstruction).not.toContain("Take only the language");
+});
+
+test("generateSuggestions, Waffen aus der Beschreibung stehen ausdrücklich im Prompt", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions({ ...request, description: "Ace mit der Vandal, dritter Kill mit der Classic" });
+
+    const text = promptText(0);
+    // Reihenfolge wie in der Waffenliste, nicht wie in der Beschreibung
+    expect(text).toContain("Weapons used (from the description, use them in the suggestions): Classic, Vandal");
+    expect(text).not.toContain("Do not name any weapon");
+});
+
+test.each([
+    ["klein geschrieben", "ace mit der vandal", "Vandal"],
+    ["mit Bindestrich", "Odin-Spray durch die Wand", "Odin"],
+    ["die neue Bandit", "3 Kills mit der Bandit", "Bandit"],
+])("generateSuggestions, Waffe wird erkannt: %s", async (_name, description, weapon) => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions({ ...request, description });
+
+    expect(promptText(0)).toContain(`(from the description, use them in the suggestions): ${weapon}`);
+});
+
+test.each([
+    ["Teil eines anderen Wortes", "Ghostbusters-Musik im Hintergrund"],
+    ["gar keine Waffe", "Meine Runde von heute"],
+])("generateSuggestions, keine Waffe erkannt: %s", async (_name, description) => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions({ ...request, description });
+
+    expect(promptText(0)).toContain("Weapons: Do not name any weapon unless it is mentioned in the description.");
+});
+
+test("generateSuggestions, Captions ohne Hashtags", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    expect(callParams(0).config.systemInstruction).toContain("Captions: the text posted with the video, without hashtags");
+});
+
+test("generateSuggestions, Waffen nur aus der Beschreibung (Zeile im Prompt und Regel)", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    expect(promptText(0)).toContain("Weapons: Do not name any weapon unless it is mentioned in the description.");
+    expect(callParams(0).config.systemInstruction).toContain("Never guess weapons from the");
 });
 
 // ---------- Agent ----------
