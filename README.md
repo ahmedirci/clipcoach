@@ -1,6 +1,6 @@
 # ClipCoach
 
-ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket League und Valorant erfolgreicher auf TikTok, Instagram und YouTube Shorts zu posten. Man gibt einen YouTube-Link zum Clip und eine kurze Beschreibung ein und bekommt von einer KI Vorschläge für Hooks, Caption, Hashtags und Titel.
+ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket League und Valorant erfolgreicher auf TikTok, Instagram und YouTube Shorts zu posten. Man gibt einen YouTube-Link zum Clip und eine kurze Beschreibung ein und bekommt von einer KI Vorschläge für Hooks, Captions, Hashtags und Titel.
 
 > **Status:** in Entwicklung. Dies ist ein privates Lernprojekt.
 
@@ -9,8 +9,10 @@ ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket Le
 - [x] 1. Projektstruktur, Git-Repo, `.gitignore`, README-Grundgerüst
 - [x] 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Beispieldaten (Demo-Modus)
 - [x] 3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests
-- [ ] 4. KI-Anbindung mit Google Gemini auf Basis der Beschreibung
-  - [ ] 4b. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
+- [ ] 4. KI-Anbindung
+  - [ ] 4a. Mehrere Plattformen und einstellbare Anzahl der Vorschläge (Demo-Modus)
+  - [ ] 4b. Anbindung an Google Gemini auf Basis der Beschreibung
+  - [ ] 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
 - [ ] 5. Frontend: Formular und Ergebnisanzeige
 - [ ] 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 - [ ] 7. Videovorschau per oEmbed
@@ -19,12 +21,12 @@ ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket Le
 ## Geplante Funktionen
 
 1. YouTube-Link zum Clip einfügen (Video oder Short)
-2. Spiel und Zielplattform wählen und den Clip kurz beschreiben
-3. Die KI liefert:
-   - Hooks für die ersten 3 Sekunden
-   - eine Caption
-   - passende Hashtags
-   - Titelvorschläge
+2. Spiel und eine oder mehrere Zielplattformen wählen, die gewünschte Anzahl an Vorschlägen einstellen und den Clip kurz beschreiben
+3. Die KI liefert pro Plattform, in der Sprache der Beschreibung:
+   - bis zu 5 Hooks für die ersten 3 Sekunden
+   - bis zu 3 Captions
+   - bis zu 10 passende Hashtags
+   - bis zu 4 Titelvorschläge (nur bei YouTube Shorts, da TikTok und Instagram keine Videotitel haben)
 4. Ist das Video öffentlich, analysiert die KI zusätzlich das Video selbst (Bild und Ton). Die App zeigt ehrlich an, ob die Vorschläge auf der Videoanalyse oder nur auf der Beschreibung beruhen.
 
 ## Tech-Stack

@@ -21,18 +21,18 @@ Eine Web-App für Gamer (Fortnite, Overwatch, Minecraft, Rocket League, Valorant
 Ablauf:
 
 1. Nutzer fügt einen YouTube-Link zu seinem Clip ein (normales Video oder Short). Andere Anbieter wie TikTok oder Medal.tv werden bewusst nicht unterstützt (siehe „Videoanalyse“).
-2. Nutzer wählt Spiel und Zielplattform und beschreibt den Clip kurz.
+2. Nutzer wählt das Spiel, eine oder mehrere Zielplattformen und wie viele Vorschläge er pro Kategorie möchte, und beschreibt den Clip kurz.
 3. Das Backend prüft die Eingaben und fragt eine KI an.
    - Version 1: Die KI arbeitet mit der Beschreibung des Nutzers.
    - Version 2: Die KI analysiert zusätzlich das YouTube-Video selbst (Bild und Ton), sofern es öffentlich ist.
-4. Die KI liefert: Hooks für die ersten 3 Sekunden, eine Caption, Hashtags und Titelvorschläge.
+4. Die KI liefert **pro gewählter Plattform** eigene Vorschläge: Hooks für die ersten 3 Sekunden, Captions, Hashtags und (nur bei YouTube Shorts) Titel. Die Vorschläge sind in derselben Sprache wie die Beschreibung.
 5. Das Frontend zeigt die Ergebnisse an, optional mit Videovorschau, und zeigt ehrlich an, ob das Video analysiert wurde oder nur die Beschreibung.
 
 ## Tech-Stack (immer aktuelle stabile Versionen, keine Beta-, RC- oder Snapshot-Versionen)
 
 - **Frontend:** React 19 mit TypeScript, aufgesetzt mit Vite
 - **Backend:** Node.js mit TypeScript und Express 5 (REST-API)
-- **Validierung im Backend:** express-validator für `game`, `platform` und `description`. Die URL-Allowlist ist eine eigene Funktion (`isAllowedClipUrl` in `services/urlValidation.ts`).
+- **Validierung im Backend:** express-validator für `game`, `platforms`, `description` und `counts`. Die URL-Allowlist ist eine eigene Funktion (`isAllowedClipUrl` in `services/urlValidation.ts`).
 - **Tests Backend:** Vitest mit supertest (im Studium Jest, die API ist fast identisch)
 - **Tests Frontend:** Vitest mit @testing-library/react und @testing-library/user-event, jsdom. `fetch` wird in Tests mit `vi.spyOn` gemockt.
 - **Absicherung:** express-rate-limit, helmet, cors (kenne ich alle aus dem Studium)
@@ -112,33 +112,65 @@ Request:
 {
   "url": "https://www.youtube.com/watch?v=...",
   "game": "fortnite | overwatch | minecraft | rocket-league | valorant",
-  "platform": "tiktok | instagram | youtube-shorts",
-  "description": "Kurze Beschreibung des Clips"
+  "platforms": ["tiktok | instagram | youtube-shorts", "..."],
+  "description": "Kurze Beschreibung des Clips",
+  "counts": { "hooks": 3, "captions": 1, "hashtags": 5, "titles": 2 }
 }
 ```
+
+- `platforms`: mindestens eine Plattform, nur feste Werte, keine doppelten Einträge.
+- `counts`: Pflichtfeld, gewünschte Anzahl pro Kategorie als ganze Zahl von 1 bis zum Höchstwert. Gilt für jede gewählte Plattform gleich. Das Frontend füllt sinnvolle Standardwerte vor.
+
+| Kategorie | Höchstwert |
+| --- | --- |
+| `hooks` | 5 |
+| `captions` | 3 |
+| `hashtags` | 10 |
+| `titles` | 4 |
 
 Response:
 
 ```json
 {
-  "hooks": ["..."],
-  "caption": "...",
-  "hashtags": ["..."],
-  "titles": ["..."],
+  "results": [
+    {
+      "platform": "tiktok",
+      "hooks": ["..."],
+      "captions": ["..."],
+      "hashtags": ["..."],
+      "titles": []
+    },
+    {
+      "platform": "youtube-shorts",
+      "hooks": ["..."],
+      "captions": ["..."],
+      "hashtags": ["..."],
+      "titles": ["..."]
+    }
+  ],
   "source": "description | video"
 }
 ```
 
-`source` zeigt, worauf die Vorschläge beruhen: nur auf der Beschreibung oder zusätzlich auf der Videoanalyse (ab Version 2).
+- `results` enthält pro gewählter Plattform einen Eintrag, in derselben Reihenfolge wie im Request.
+- **Titel gibt es nur bei YouTube Shorts.** Bei TikTok und Instagram gibt es keinen Videotitel (dort ist die Caption der Text zum Video), deshalb ist `titles` dort immer eine leere Liste.
+- `source` zeigt, worauf die Vorschläge beruhen: nur auf der Beschreibung oder zusätzlich auf der Videoanalyse (ab Version 2). `source` setzt unser Code, nie die KI.
 
-Bei ungültigen Eingaben: Status 400 mit Body `{ "errors": [...] }` (Format von express-validator), ohne interne Details.
+Statuscodes:
+
+- **400** bei ungültigen Eingaben, mit Body `{ "errors": [...] }` (Format von express-validator), ohne interne Details.
+- **503**, wenn das Gemini-Kontingent erschöpft ist (Gemini antwortet mit 429), mit der Meldung „Nutzungslimit erreicht. Bitte versuche es nach einiger Zeit erneut.“ 429 ist für unser eigenes Rate Limiting (Schritt 6) reserviert, damit das Frontend beide Fälle unterscheiden kann. Später möglich: die genaue Wartezeit anzeigen (Gemini liefert oft `retryDelay` mit).
+- **500** bei allen anderen Fehlern, mit allgemeiner Meldung.
 
 ## KI-Anbindung
 
 - Der gesamte KI-Aufruf steckt in genau einer Datei: `backend/src/services/aiService.ts`. Der Rest des Backends kennt den Anbieter nicht. So lässt sich der Anbieter später wechseln, ohne anderen Code anzufassen.
 - **Demo-Modus:** Wenn in `backend/.env` kein `GEMINI_API_KEY` gesetzt ist, liefert `aiService.ts` feste Beispieldaten im selben JSON-Format. So kann jeder das Repo klonen und starten, ohne Key und ohne Kosten.
-- **Free-Tier-Limits:** Wenn Gemini mit Status 429 antwortet (Limit erreicht), bekommt der Client eine verständliche Meldung wie „Gerade zu viele Anfragen, bitte gleich nochmal versuchen“, keine internen Details.
-- Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Spiel, Plattform, Clip-Beschreibung und (ab Version 2) der öffentliche YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
+- **Free-Tier-Limits:** Wenn Gemini mit Status 429 antwortet (Limit erreicht), bekommt der Client Status 503 mit einer verständlichen Meldung (siehe API), keine internen Details. Dafür gibt es eigene Fehlerklassen im Service; der Router kennt nur diese, nicht Gemini.
+- **Ein Aufruf für alle Plattformen:** Gemini wird pro Request nur einmal gefragt, auch wenn mehrere Plattformen gewählt sind. Das spart Kontingent.
+- **Sprache:** Die Vorschläge kommen in derselben Sprache wie die Beschreibung.
+- **KI-Antwort nicht blind vertrauen:** Gemini bekommt ein JSON-Schema vorgegeben. Die Antwort wird trotzdem im Backend geprüft (Typen, Anzahl, Plattformen), bevor sie an den Client geht.
+- Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Spiel, Plattformen, gewünschte Anzahl, Clip-Beschreibung und (ab Version 2) der öffentliche YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
 
 ## Videoanalyse (Version 2)
 
@@ -160,7 +192,7 @@ Bei ungültigen Eingaben: Status 400 mit Body `{ "errors": [...] }` (Format von 
   - Hostname exakt in dieser Liste: `youtube.com`, `www.youtube.com`, `m.youtube.com`, `youtu.be`
 - Niemals `startsWith` oder `includes` auf den ganzen Link anwenden, da Tricks wie `youtube.com.boese-seite.de` oder `youtube.com@boese-seite.de` sonst durchkommen.
 - **Validierung doppelt:** Im Frontend für die Nutzerfreundlichkeit, im Backend als eigentliche Sicherheitsschicht. Das Backend vertraut dem Frontend nie. Nur validierte Daten (`matchedData`) gehen an die Services.
-- **Eingaben begrenzen:** `game` und `platform` nur aus festen Werten, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
+- **Eingaben begrenzen:** `game` und `platforms` nur aus festen Werten (`platforms` ohne Duplikate), `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
 - **API-Key schützen:** Der KI-API-Key steht nur in `backend/.env`. Die `.env` steht in der `.gitignore` und wird nie committet. Lege eine `backend/.env.example` ohne echten Key an. Der Key wird niemals im Frontend verwendet.
 - **Rate Limiting** auf `/api/generate` mit express-rate-limit, damit niemand das kostenlose Kontingent aufbraucht.
 - **helmet** für sichere HTTP-Header.
@@ -178,8 +210,10 @@ Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-S
 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Dummy-Antwort (Demo-Modus)
 3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests in Vitest
    - → **Ziel für die Bewerbung: Schritte 1 bis 3 auf GitHub**
-4. KI-Anbindung mit Gemini in `aiService.ts` auf Basis der Beschreibung, Antwort im oben definierten JSON-Format
-   - 4b. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
+4. KI-Anbindung, aufgeteilt in drei Teile:
+   - 4a. Neues Request-/Response-Format (mehrere Plattformen, `counts`, `captions`, Titel nur bei YouTube Shorts) mit Validierung und Tests, zunächst im Demo-Modus
+   - 4b. Gemini-Anbindung in `aiService.ts` auf Basis der Beschreibung: Prompt, JSON-Schema, Prüfung der KI-Antwort, eigene Fehlerklassen, 503 bei erschöpftem Kontingent
+   - 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
 5. Frontend: Formular und Ergebnisanzeige (inkl. Hinweis, ob das Video analysiert wurde). Formulare in React habe ich im Studium noch nicht vertieft (Blatt 11 war optional). Hier besonders gründlich erklären.
 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 7. Videovorschau per oEmbed
