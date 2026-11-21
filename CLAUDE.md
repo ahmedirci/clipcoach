@@ -119,7 +119,8 @@ Request:
   "description": "Kurze Beschreibung des Clips",
   "counts": { "hooks": 3, "captions": 1, "hashtags": 5, "titles": 2 },
   "agent": "Neon",
-  "rank": "Gold"
+  "rank": "Gold",
+  "map": "Ascent"
 }
 ```
 
@@ -127,6 +128,7 @@ Request:
 - `counts`: Pflichtfeld, gewünschte Anzahl pro Kategorie als ganze Zahl von 1 bis zum Höchstwert. Gilt für jede gewählte Plattform gleich. Das Frontend füllt sinnvolle Standardwerte vor.
 - `agent`: **optional**, der Agent, den der Nutzer im Clip spielt. Nur Werte aus `AGENTS` in `Resources.ts` (30 Agents, Schreibweise wie auf playvalorant.com/de-de/agents, Stand 21.11.2026, z. B. `"KAY/O"`). Fehlt das Feld, wird kein Agent genannt. `""` oder `null` werden abgelehnt: „kein Agent“ heißt, das Feld wird nicht mitgeschickt. Neue Agents müssen in der Liste ergänzt werden.
 - `rank`: **optional**, der Rank des Nutzers. Nur Werte aus `RANKS` in `Resources.ts` (Iron, Bronze, Silver, Gold, Platinum, Diamond, Ascendant, Immortal, Radiant, ohne Stufen wie „Gold 2“). Gleiche Regeln wie bei `agent`.
+- `map`: **optional**, die Map des Clips. Nur Werte aus `MAPS` in `Resources.ts` (13 Maps laut playvalorant.com/de-de/maps, Stand 21.11.2026, ohne Team-Deathmatch-Maps). Gleiche Regeln wie bei `agent`. Der Typ heißt `GameMap`, weil `Map` in JavaScript schon eine eingebaute Klasse ist. Fehlt das Feld, wird eine Map nur genannt, wenn sie in der Beschreibung steht.
 
 | Kategorie | Höchstwert |
 | --- | --- |
@@ -224,7 +226,7 @@ Messung am 21.11.2026 mit einem echten Clip (Nutzer spielt Neon; Mate stirbt am 
 
 | Information | Ergebnis | Woher sie deshalb kommt |
 | --- | --- | --- |
-| Waffen und Waffenwechsel | 3 von 3 richtig (Vandal → Phantom), auch ohne Hinweise zu Magazingrößen | Video |
+| Waffen und Waffenwechsel | 3 von 3 richtig (Vandal → Phantom), auch ohne Hinweise zu Magazingrößen. **Aber:** In einem zweiten Clip mit Waffen-Skin falsch („Odin“ statt Vandal), siehe Schritt 4e | Video (bedingt zuverlässig) |
 | Anzahl Kills | 3 von 3 richtig | Video |
 | Seite und Spike-Plant | 3 von 3 richtig | Video |
 | Highlight-Moment | gut brauchbar | Video |
@@ -273,13 +275,15 @@ Fachwissen aus Stichpunkten des Nutzers (Valorant-Spieler), ergänzt durch Reche
 
 **YouTube-Tags (`tags`)**, nur bei YouTube Shorts:
 
-- `finalizeYouTubeTags`: vorne `valorant`, dann Agent und Rank (falls angegeben), dann die Tags der KI. Entfernt werden `#` am Anfang, Kommas (Trennzeichen bei YouTube) und spitze Klammern (bei YouTube nicht erlaubt). Höchstens 15 Tags, zusammen höchstens 500 Zeichen inklusive Kommas.
-- Die Map kommt nur in die Tags, wenn sie in der Beschreibung steht (die KI erkennt sie nicht zuverlässig).
+- `finalizeYouTubeTags`: vorne `valorant`, dann Agent, Rank und Map (falls angegeben), dann die Tags der KI. Die Map wird bewusst nicht als Hashtag gesetzt (steht nicht in der Hashtag-Liste des Nutzers), nur als Tag. Entfernt werden `#` am Anfang, Kommas (Trennzeichen bei YouTube) und spitze Klammern (bei YouTube nicht erlaubt). Höchstens 15 Tags, zusammen höchstens 500 Zeichen inklusive Kommas.
+- Ohne Feld `map` kommt die Map nur in die Tags, wenn sie in der Beschreibung steht (die KI erkennt sie nicht zuverlässig).
 
 **Messung am 21.11.2026** mit einem Ace-Clip (neutrale Beschreibung „Meine Runde von heute“):
 
 - Mit Video: Ace selbst erkannt („So sieht ein Ace aus!“, Titel „Perfektes Ace in Valorant“), Hashtags genau nach Plan (`#valorant #fyp #valo #ace #clip #gaming #highlight #gameplay #peak #fast`), sinnvolle Tags (98 von 500 Zeichen), keine erfundenen Agents oder Maps.
-- Fallback ohne Video (Google war bei der Videoanalyse überlastet): unbrauchbare Hashtags (siehe oben). Daraufhin korrigiert. Ein echter Test nach der Korrektur steht noch aus, weil Google beim erneuten Test überlastet war (503).
+- Fallback ohne Video (Google war bei der Videoanalyse überlastet): unbrauchbare Hashtags (siehe oben). Daraufhin korrigiert.
+- Nach der Korrektur (zweiter Live-Test am selben Tag): Fallback ohne Video liefert 10 saubere Hashtags (`#valorant #fyp #valo #ace #clip …`), keine Platzhalter. Mit Video, Rank „Gold“ und Map „Ascent“: Ace erkannt, `#gold` an fester Stelle, Tags beginnen mit `valorant, Gold, Ascent`.
+- **Waffen mit Skins:** Im Ace-Clip (Vandal mit Skin, dritter Kill mit der Classic) erkannte die KI einmal „Odin“ und einmal „Vandal“; die Classic gar nicht. Im ersten Clip (Vandal und Phantom) war die Erkennung 3 von 3 richtig. Waffen sind also nur bedingt zuverlässig, Skins verändern das Aussehen stark.
 
 ## Sicherheitsregeln (immer einhalten)
 
@@ -292,7 +296,7 @@ Fachwissen aus Stichpunkten des Nutzers (Valorant-Spieler), ergänzt durch Reche
   - der Link muss auf ein **einzelnes Video** zeigen (Video-ID mit genau 11 Zeichen aus Buchstaben, Ziffern, `-` und `_`). Kanäle, Playlists und die Startseite werden mit eigener Meldung abgelehnt: „Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist.“
 - Niemals `startsWith` oder `includes` auf den ganzen Link anwenden, da Tricks wie `youtube.com.boese-seite.de` oder `youtube.com@boese-seite.de` sonst durchkommen.
 - **Validierung doppelt:** Im Frontend für die Nutzerfreundlichkeit, im Backend als eigentliche Sicherheitsschicht. Das Backend vertraut dem Frontend nie. Nur validierte Daten (`matchedData`) gehen an die Services.
-- **Eingaben begrenzen:** `platforms` nur aus festen Werten und ohne Duplikate, `agent` und `rank` (beide optional) nur aus den festen Listen, `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
+- **Eingaben begrenzen:** `platforms` nur aus festen Werten und ohne Duplikate, `agent`, `rank` und `map` (alle optional) nur aus den festen Listen, `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
 - **API-Key schützen:** Der KI-API-Key steht nur in `backend/.env`. Die `.env` steht in der `.gitignore` und wird nie committet. Lege eine `backend/.env.example` ohne echten Key an. Der Key wird niemals im Frontend verwendet.
 - **Rate Limiting** auf `/api/generate` mit express-rate-limit, damit niemand das kostenlose Kontingent aufbraucht.
 - **helmet** für sichere HTTP-Header.
@@ -315,7 +319,7 @@ Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-S
    - 4b. Gemini-Anbindung in `aiService.ts` auf Basis der Beschreibung: Prompt, JSON-Schema, Prüfung der KI-Antwort, eigene Fehlerklassen, 503 bei erschöpftem Kontingent
    - 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
    - 4d. Fokus auf Valorant und Erkennungsgenauigkeit: Spielauswahl entfernt, gemessen, was die KI zuverlässig erkennt, optionales Feld `agent`, Agent und Map nur vom Nutzer (siehe „Was die KI im Valorant-Clip zuverlässig erkennt“)
-   - 4e. Valorant-Kontext, Hashtags und YouTube-Tags: Highlights und Kill-Zähler im Prompt, feste Hashtags per Code, optionales Feld `rank`, neue Ausgabe `tags` (siehe „Valorant-Kontext, Hashtags und Tags“). Offen: echter Test des Fallback-Wegs nach der Hashtag-Korrektur (Google war beim Test überlastet)
+   - 4e. Valorant-Kontext, Hashtags und YouTube-Tags: Highlights und Kill-Zähler im Prompt, feste Hashtags per Code, optionale Felder `rank` und `map`, neue Ausgabe `tags` (siehe „Valorant-Kontext, Hashtags und Tags“)
 5. Frontend: Formular und Ergebnisanzeige (inkl. Hinweis, ob das Video analysiert wurde). Formulare in React habe ich im Studium noch nicht vertieft (Blatt 11 war optional). Hier besonders gründlich erklären.
 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 7. Videovorschau per oEmbed
