@@ -16,12 +16,16 @@ Ich bin Student (Medieninformatik) und bewerbe mich als Werkstudent in der Softw
 
 ## Was ClipCoach macht
 
-Eine Web-App für Gamer (Fortnite, Overwatch, Minecraft, Rocket League, Valorant), die ihre Gaming-Clips erfolgreicher auf TikTok, Instagram und YouTube Shorts posten wollen.
+Eine Web-App für **Valorant**-Spieler, die ihre Clips erfolgreicher auf TikTok, Instagram und YouTube Shorts posten wollen.
+
+**Fokus auf ein Spiel (Entscheidung vom 21.11.2026):** Ursprünglich waren fünf Spiele geplant (Fortnite, Overwatch, Minecraft, Rocket League, Valorant). Messungen in Schritt 4c/4d haben gezeigt, dass gute Vorschläge spielspezifisches Wissen brauchen (Charaktere, Waffen, typische Highlights) und die KI dabei ohne Hilfe selbstbewusst falsch rät. Für ein Ein-Personen-Projekt ist ein Spiel, das gut funktioniert, besser als fünf halb. Deshalb gibt es kein Feld `game` mehr (YAGNI); kommen später Spiele dazu, wird es wieder eingeführt.
+
+**Name und Marke:** Der Name bleibt „ClipCoach“ (ohne „Valo…“), in Texten steht „für Valorant“. Laut Riots Richtlinie für Fan-Projekte („Legal Jibber Jabber“) dürfen Riot-Marken ohne Lizenz nicht im Projekt, in Domains oder Social-Media-Namen verwendet werden, und Fan-Projekte brauchen einen Hinweis, dass Riot sie nicht unterstützt. Dieser Hinweis steht in der README.
 
 Ablauf:
 
 1. Nutzer fügt einen YouTube-Link zu seinem Clip ein (normales Video oder Short). Andere Anbieter wie TikTok oder Medal.tv werden bewusst nicht unterstützt (siehe „Videoanalyse“).
-2. Nutzer wählt das Spiel, eine oder mehrere Zielplattformen und wie viele Vorschläge er pro Kategorie möchte, und beschreibt den Clip kurz.
+2. Nutzer wählt eine oder mehrere Zielplattformen und wie viele Vorschläge er pro Kategorie möchte, und beschreibt den Clip kurz.
 3. Das Backend prüft die Eingaben und fragt eine KI an.
    - Version 1: Die KI arbeitet mit der Beschreibung des Nutzers.
    - Version 2: Die KI analysiert zusätzlich das YouTube-Video selbst (Bild und Ton), sofern es öffentlich ist.
@@ -32,7 +36,7 @@ Ablauf:
 
 - **Frontend:** React 19 mit TypeScript, aufgesetzt mit Vite
 - **Backend:** Node.js mit TypeScript und Express 5 (REST-API)
-- **Validierung im Backend:** express-validator für `game`, `platforms`, `description` und `counts`. Die URL-Allowlist ist eine eigene Funktion (`isAllowedClipUrl` in `services/urlValidation.ts`).
+- **Validierung im Backend:** express-validator für `url`, `platforms`, `description` und `counts`. Die URL-Allowlist ist eine eigene Funktion (`isAllowedClipUrl` in `services/urlValidation.ts`).
 - **Tests Backend:** Vitest mit supertest (im Studium Jest, die API ist fast identisch)
 - **Tests Frontend:** Vitest mit @testing-library/react und @testing-library/user-event, jsdom. `fetch` wird in Tests mit `vi.spyOn` gemockt.
 - **Absicherung:** express-rate-limit, helmet, cors (kenne ich alle aus dem Studium)
@@ -111,7 +115,6 @@ Request:
 ```json
 {
   "url": "https://www.youtube.com/watch?v=...",
-  "game": "fortnite | overwatch | minecraft | rocket-league | valorant",
   "platforms": ["tiktok | instagram | youtube-shorts", "..."],
   "description": "Kurze Beschreibung des Clips",
   "counts": { "hooks": 3, "captions": 1, "hashtags": 5, "titles": 2 }
@@ -182,7 +185,7 @@ Statuscodes:
 - **Sprache:** Die Vorschläge kommen in derselben Sprache wie die Beschreibung.
 - **KI-Antwort nicht blind vertrauen:** Gemini bekommt ein JSON-Schema vorgegeben. Die Antwort wird trotzdem im Backend geprüft (Typen, Anzahl, Plattformen), bevor sie an den Client geht. Reihenfolge und Plattformen bestimmt der Request, nicht die KI; zu viele Einträge werden gekürzt, Titel bei TikTok und Instagram verworfen.
 - **Tests schicken nie echte KI-Anfragen:** `vitest.config.ts` leert `GEMINI_API_KEY` für alle Tests. Tests für die Gemini-Anbindung ersetzen das SDK mit `vi.mock("@google/genai")` und setzen einen Fake-Key mit `vi.stubEnv`.
-- Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Spiel, Plattformen, gewünschte Anzahl, Clip-Beschreibung und (ab Version 2) der bereinigte YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
+- Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Plattformen, gewünschte Anzahl, Clip-Beschreibung und (ab Version 2) der bereinigte YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
 
 ## Videoanalyse (Version 2, Schritt 4c)
 
@@ -196,8 +199,8 @@ Statuscodes:
   - Scheitern beide Versuche, kommt der Fehler des 2. Versuchs beim Router an. Schlimmster Fall: 2 × 30 Sekunden.
   - `source: "video"` setzt unser Code nur, wenn die Videoanalyse wirklich geklappt hat.
 - **Kontingent sparen:** nur die ersten 3 Minuten (`videoMetadata.endOffset: "180s"`, Shorts sind maximal 3 Minuten lang) in niedriger Auflösung (`mediaResolution: MEDIA_RESOLUTION_LOW`). Gemessen: etwa 89 Tokens pro Sekunde Video, ein 35-Sekunden-Clip also rund 3.100 Tokens. Free Tier: höchstens 8 Stunden YouTube-Video pro Tag.
-- **Schutz vor Trollen** (Beschreibung oder Spiel passen nicht zum Video):
-  - Zusätzliche System-Anweisung im Video-Modus: Das Video ist die einzige Wahrheit über den Inhalt, Beschreibung und Spiel sind nur Hinweise und können absichtlich irreführend sein. Aus der Beschreibung wird nur die Sprache übernommen.
+- **Schutz vor Trollen** (Beschreibung passt nicht zum Video):
+  - Zusätzliche System-Anweisung im Video-Modus: Das Video ist die einzige Wahrheit über den Inhalt, die Beschreibung ist nur ein Hinweis und kann absichtlich irreführend sein. Aus der Beschreibung wird nur die Sprache übernommen. Zeigt das Video kein Valorant, schreibt die KI über das Spiel, das wirklich zu sehen ist.
   - Das JSON-Schema bekommt im Video-Modus das Feld `videoContent`, das die KI per `propertyOrdering` **zuerst** ausfüllen muss (was ist im Video zu sehen?). Erst danach schreibt sie die Vorschläge. `videoContent` wird nur intern genutzt und nicht an den Client geschickt.
   - Gemessen am 21.11.2026 (Overwatch-Clip mit Minecraft-Beschreibung): nur mit Anweisung 2 von 3 Durchläufen richtig, mit `videoContent` 3 von 3.
 - Nur Links, die die Allowlist bestanden haben und eine Video-ID enthalten, werden an Gemini übergeben.
@@ -217,7 +220,7 @@ Statuscodes:
   - der Link muss auf ein **einzelnes Video** zeigen (Video-ID mit genau 11 Zeichen aus Buchstaben, Ziffern, `-` und `_`). Kanäle, Playlists und die Startseite werden mit eigener Meldung abgelehnt: „Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist.“
 - Niemals `startsWith` oder `includes` auf den ganzen Link anwenden, da Tricks wie `youtube.com.boese-seite.de` oder `youtube.com@boese-seite.de` sonst durchkommen.
 - **Validierung doppelt:** Im Frontend für die Nutzerfreundlichkeit, im Backend als eigentliche Sicherheitsschicht. Das Backend vertraut dem Frontend nie. Nur validierte Daten (`matchedData`) gehen an die Services.
-- **Eingaben begrenzen:** `game` und `platforms` nur aus festen Werten (`platforms` ohne Duplikate), `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
+- **Eingaben begrenzen:** `platforms` nur aus festen Werten und ohne Duplikate, `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
 - **API-Key schützen:** Der KI-API-Key steht nur in `backend/.env`. Die `.env` steht in der `.gitignore` und wird nie committet. Lege eine `backend/.env.example` ohne echten Key an. Der Key wird niemals im Frontend verwendet.
 - **Rate Limiting** auf `/api/generate` mit express-rate-limit, damit niemand das kostenlose Kontingent aufbraucht.
 - **helmet** für sichere HTTP-Header.
@@ -239,6 +242,7 @@ Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-S
    - 4a. Neues Request-/Response-Format (mehrere Plattformen, `counts`, `captions`, Titel nur bei YouTube Shorts) mit Validierung und Tests, zunächst im Demo-Modus
    - 4b. Gemini-Anbindung in `aiService.ts` auf Basis der Beschreibung: Prompt, JSON-Schema, Prüfung der KI-Antwort, eigene Fehlerklassen, 503 bei erschöpftem Kontingent
    - 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
+   - 4d. Fokus auf Valorant und Erkennungsgenauigkeit: Spielauswahl entfernen, dann messen, was die KI aus dem Video zuverlässig erkennt (Agent, Waffen, Kills, Spike, Highlight), und je nach Ergebnis Angaben vom Nutzer oder Platzhalter wie `[Agent]` verwenden
 5. Frontend: Formular und Ergebnisanzeige (inkl. Hinweis, ob das Video analysiert wurde). Formulare in React habe ich im Studium noch nicht vertieft (Blatt 11 war optional). Hier besonders gründlich erklären.
 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 7. Videovorschau per oEmbed

@@ -1,6 +1,6 @@
 # ClipCoach
 
-ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket League und Valorant erfolgreicher auf TikTok, Instagram und YouTube Shorts zu posten. Man gibt einen YouTube-Link zum Clip und eine kurze Beschreibung ein und bekommt von einer KI Vorschläge für Hooks, Captions, Hashtags und Titel.
+**Für Valorant.** ClipCoach hilft Valorant-Spielern, ihre Clips erfolgreicher auf TikTok, Instagram und YouTube Shorts zu posten. Man gibt einen YouTube-Link zum Clip und eine kurze Beschreibung ein und bekommt von einer KI Vorschläge für Hooks, Captions, Hashtags und Titel.
 
 > **Status:** in Entwicklung. Dies ist ein privates Lernprojekt.
 
@@ -9,10 +9,11 @@ ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket Le
 - [x] 1. Projektstruktur, Git-Repo, `.gitignore`, README-Grundgerüst
 - [x] 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Beispieldaten (Demo-Modus)
 - [x] 3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests
-- [x] 4. KI-Anbindung
+- [ ] 4. KI-Anbindung
   - [x] 4a. Mehrere Plattformen und einstellbare Anzahl der Vorschläge (Demo-Modus)
   - [x] 4b. Anbindung an Google Gemini auf Basis der Beschreibung
   - [x] 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
+  - [ ] 4d. Fokus auf Valorant und genauere Erkennung von Agent, Waffen und Highlights
 - [ ] 5. Frontend: Formular und Ergebnisanzeige
 - [ ] 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 - [ ] 7. Videovorschau per oEmbed
@@ -21,7 +22,7 @@ ClipCoach hilft Gamern, ihre Clips aus Fortnite, Overwatch, Minecraft, Rocket Le
 ## Geplante Funktionen
 
 1. YouTube-Link zum Clip einfügen (Video oder Short)
-2. Spiel und eine oder mehrere Zielplattformen wählen, die gewünschte Anzahl an Vorschlägen einstellen und den Clip kurz beschreiben
+2. Eine oder mehrere Zielplattformen wählen, die gewünschte Anzahl an Vorschlägen einstellen und den Clip kurz beschreiben
 3. Die KI liefert pro Plattform, in der Sprache der Beschreibung:
    - bis zu 5 Hooks für die ersten 3 Sekunden
    - bis zu 3 Captions
@@ -82,3 +83,7 @@ Geplant ist ein **Demo-Modus:** Ohne API-Key liefert das Backend feste Beispield
 ## Lizenz
 
 [MIT](LICENSE)
+
+## Hinweis zu Riot Games
+
+ClipCoach ist ein privates Fan- und Lernprojekt und steht in keiner Verbindung zu Riot Games. Riot Games unterstützt oder sponsert dieses Projekt nicht. Valorant ist eine Marke von Riot Games, Inc.
