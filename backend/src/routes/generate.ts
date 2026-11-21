@@ -1,6 +1,6 @@
 import express from "express";
 import { body, matchedData, validationResult } from "express-validator";
-import { COUNT_LIMITS, GAMES, PLATFORMS, type GenerateRequestResource } from "../Resources.js";
+import { COUNT_LIMITS, PLATFORMS, type GenerateRequestResource } from "../Resources.js";
 import { AiRateLimitError, AiUnavailableError, generateSuggestions } from "../services/aiService.js";
 import { extractYouTubeVideoId, isAllowedClipUrl } from "../services/urlValidation.js";
 
@@ -31,7 +31,6 @@ const postGenerateValidators = [
         // Eigene Meldung, wenn der Link zwar zu YouTube führt, aber auf kein einzelnes Video
         .custom((value: string) => extractYouTubeVideoId(value) !== null)
         .withMessage("Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist."),
-    oneOf("game", GAMES, "Bitte wähle ein unterstütztes Spiel."),
 
     // platforms: eine Liste mit 1 bis 3 Einträgen, ohne doppelte Einträge ...
     body("platforms", "Bitte wähle mindestens eine Plattform, jede höchstens einmal.")

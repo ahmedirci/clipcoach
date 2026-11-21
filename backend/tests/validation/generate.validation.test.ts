@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import supertest from "supertest";
 import { app } from "../../src/app.js";
-import { COUNT_LIMITS, GAMES, PLATFORMS } from "../../src/Resources.js";
+import { COUNT_LIMITS, PLATFORMS } from "../../src/Resources.js";
 import { generateSuggestions } from "../../src/services/aiService.js";
 
 // Der Service wird durch eine Attrappe ersetzt. So testen wir nur die Validierung
@@ -14,7 +14,6 @@ vi.mock("../../src/services/aiService.js", () => ({
 
 const validBody = {
     url: "https://www.youtube.com/watch?v=abc123DEF45",
-    game: "fortnite",
     platforms: ["tiktok"],
     description: "1 gegen 4 mit wenig Leben gewonnen",
     counts: { hooks: 3, captions: 1, hashtags: 5, titles: 2 },
@@ -90,7 +89,6 @@ test("POST /api/generate, leerer Body wird mit Fehlern für alle Felder abgelehn
     const fields = response.body.errors.map((error: { path: string }) => error.path);
     expect(fields).toEqual([
         "url",
-        "game",
         "platforms",
         "description",
         "counts.hooks",
@@ -162,25 +160,15 @@ test.each([
     expect(response.status).toBe(200);
 });
 
-// ---------- game ----------
+// ---------- game (gibt es nicht mehr) ----------
 
-test.each(GAMES)("POST /api/generate, Spiel %s wird angenommen", async (game) => {
-    const response = await postGenerate({ ...validBody, game });
+test("POST /api/generate, altes Feld game wird ignoriert", async () => {
+    // ClipCoach ist nur für Valorant. Ein mitgeschicktes "game" stört nicht,
+    // geht aber auch nicht an den Service weiter.
+    const response = await postGenerate({ ...validBody, game: "fortnite" });
+
     expect(response.status).toBe(200);
-});
-
-test("POST /api/generate, fehlendes Spiel", async () => {
-    expectRejected(await postGenerate({ ...validBody, game: undefined }), "game");
-});
-
-test.each([
-    ["ein unbekanntes Spiel", "fifa"],
-    ["großgeschrieben", "Fortnite"],
-    ["ein leerer Text", ""],
-    ["ein Array", ["fortnite"]],
-    ["eine Zahl", 1],
-])("POST /api/generate, Spiel ist %s", async (_name, game) => {
-    expectRejected(await postGenerate({ ...validBody, game }), "game");
+    expect(generateSuggestions).toHaveBeenCalledWith(validBody);
 });
 
 // ---------- platforms ----------

@@ -11,7 +11,6 @@ vi.mock("../../src/services/aiService.js", async (importOriginal) => {
 
 const validBody = {
     url: "https://www.youtube.com/watch?v=abc123DEF45",
-    game: "fortnite",
     platforms: ["tiktok"],
     description: "1 gegen 4 mit wenig Leben gewonnen",
     counts: { hooks: 3, captions: 1, hashtags: 5, titles: 2 },

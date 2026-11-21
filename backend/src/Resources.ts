@@ -1,9 +1,7 @@
 // Die erlaubten Werte stehen nur hier. Der Validator nutzt die Arrays,
 // TypeScript leitet daraus die Typen ab. "as const" macht aus dem Array
 // eine feste Liste genau dieser Texte (statt nur "string[]").
-export const GAMES = ["fortnite", "overwatch", "minecraft", "rocket-league", "valorant"] as const;
-export type Game = (typeof GAMES)[number];
-
+// ClipCoach ist bewusst nur für Valorant, deshalb gibt es keine Spielauswahl.
 export const PLATFORMS = ["tiktok", "instagram", "youtube-shorts"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
@@ -28,7 +26,6 @@ export type ResultSource = "description" | "video";
 
 export type GenerateRequestResource = {
     url: string;
-    game: Game;
     platforms: Platform[];
     description: string;
     counts: SuggestionCounts;

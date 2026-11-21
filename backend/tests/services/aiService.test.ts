@@ -4,7 +4,6 @@ import { generateSuggestions } from "../../src/services/aiService.js";
 
 const request: GenerateRequestResource = {
     url: "https://www.youtube.com/watch?v=abc123DEF45",
-    game: "fortnite",
     platforms: ["tiktok"],
     description: "1 gegen 4 mit wenig Leben gewonnen",
     counts: { hooks: 1, captions: 1, hashtags: 1, titles: 1 },

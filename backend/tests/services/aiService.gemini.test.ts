@@ -17,9 +17,8 @@ const generateContent = vi.fn();
 // Ein Teilen-Link mit Tracking-Parameter "si", wie YouTube ihn erzeugt
 const request: GenerateRequestResource = {
     url: "https://youtu.be/abc123DEF45?si=GeteiltVonJemandem",
-    game: "rocket-league",
     platforms: ["tiktok", "youtube-shorts"],
-    description: "Tor in letzter Sekunde",
+    description: "Spike in letzter Sekunde entschärft",
     counts: { hooks: 2, captions: 1, hashtags: 3, titles: 2 },
 };
 
@@ -144,17 +143,24 @@ test("generateSuggestions, videoContent aus der KI-Antwort geht nicht an den Cli
     expect(result).toEqual({ ...validAiAnswer, source: "video" });
 });
 
-test("generateSuggestions, Prompt-Text enthält Spiel, Plattformen, Anzahl und Beschreibung, aber keinen Link", async () => {
+test("generateSuggestions, die KI ist auf Valorant ausgerichtet", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    expect(callParams(0).config.systemInstruction).toContain("Valorant clips");
+});
+
+test("generateSuggestions, Prompt-Text enthält Plattformen, Anzahl und Beschreibung, aber keinen Link", async () => {
     aiAnswers(validAiAnswer);
 
     await generateSuggestions(request);
 
     const text = promptText(0);
-    expect(text).toContain("Rocket League");
     expect(text).toContain("tiktok");
     expect(text).toContain("youtube-shorts");
     expect(text).toContain("hooks 2, captions 1, hashtags 3, titles 2");
-    expect(text).toContain("Tor in letzter Sekunde");
+    expect(text).toContain("Spike in letzter Sekunde entschärft");
     // Das Video geht als eigener Teil mit, im Text steht weder Link noch Video-ID
     expect(text).not.toContain("https://");
     expect(text).not.toContain("abc123DEF45");

@@ -7,7 +7,6 @@ test("POST /api/generate, liefert Demo-Daten pro Plattform im richtigen Format",
         .post("/api/generate")
         .send({
             url: "https://www.youtube.com/watch?v=abc123DEF45",
-            game: "fortnite",
             platforms: ["tiktok", "youtube-shorts"],
             description: "1 gegen 4 mit wenig Leben gewonnen",
             counts: { hooks: 3, captions: 1, hashtags: 5, titles: 2 },
