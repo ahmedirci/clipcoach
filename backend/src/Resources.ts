@@ -16,6 +16,12 @@ export const AGENTS = [
 ] as const;
 export type Agent = (typeof AGENTS)[number];
 
+// Valorant-Ränge vom niedrigsten zum höchsten (ohne Stufen wie "Gold 2")
+export const RANKS = [
+    "Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal", "Radiant",
+] as const;
+export type Rank = (typeof RANKS)[number];
+
 // Höchstwerte für die gewünschte Anzahl an Vorschlägen pro Kategorie
 export const COUNT_LIMITS = {
     hooks: 5,
@@ -42,6 +48,8 @@ export type GenerateRequestResource = {
     counts: SuggestionCounts;
     // Optional: der Agent, den der Nutzer im Clip spielt. Fehlt er, wird kein Agent genannt.
     agent?: Agent;
+    // Optional: der Rank des Nutzers. Fehlt er, wird kein Rank genannt.
+    rank?: Rank;
 };
 
 // Vorschläge für genau eine Plattform
@@ -52,6 +60,9 @@ export type PlatformSuggestionsResource = {
     hashtags: string[];
     // Nur bei YouTube Shorts gefüllt, sonst immer eine leere Liste
     titles: string[];
+    // Unsichtbare Such-Tags für YouTube (ohne "#", zusammen höchstens 500 Zeichen).
+    // Nur bei YouTube Shorts gefüllt, sonst immer eine leere Liste.
+    tags: string[];
 };
 
 export type GenerateResultResource = {

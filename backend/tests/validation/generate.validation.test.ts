@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import supertest from "supertest";
 import { app } from "../../src/app.js";
-import { AGENTS, COUNT_LIMITS, PLATFORMS } from "../../src/Resources.js";
+import { AGENTS, COUNT_LIMITS, PLATFORMS, RANKS } from "../../src/Resources.js";
 import { generateSuggestions } from "../../src/services/aiService.js";
 
 // Der Service wird durch eine Attrappe ersetzt. So testen wir nur die Validierung
@@ -22,7 +22,7 @@ const validBody = {
 beforeEach(() => {
     vi.mocked(generateSuggestions).mockReset();
     vi.mocked(generateSuggestions).mockResolvedValue({
-        results: [{ platform: "tiktok", hooks: ["Hook"], captions: ["Caption"], hashtags: ["#gaming"], titles: [] }],
+        results: [{ platform: "tiktok", hooks: ["Hook"], captions: ["Caption"], hashtags: ["#gaming"], titles: [], tags: [] }],
         source: "description",
     });
 });
@@ -312,4 +312,28 @@ test.each([
 
     expectRejected(response, "agent");
     expect(response.body.errors[0].msg).toBe("Bitte wähle einen Agent aus der Liste oder lass das Feld weg.");
+});
+
+// ---------- rank (optional) ----------
+
+test.each(RANKS)("POST /api/generate, Rank %s wird angenommen und weitergegeben", async (rank) => {
+    const response = await postGenerate({ ...validBody, rank });
+
+    expect(response.status).toBe(200);
+    expect(generateSuggestions).toHaveBeenCalledWith({ ...validBody, rank });
+});
+
+test.each([
+    ["ein unbekannter Rank", "Champion"],
+    ["kleingeschrieben", "gold"],
+    ["mit Stufe", "Gold 2"],
+    ["ein leerer Text", ""],
+    ["null", null],
+    ["eine Zahl", 3],
+    ["ein Array", ["Gold"]],
+])("POST /api/generate, Rank ist %s", async (_name, rank) => {
+    const response = await postGenerate({ ...validBody, rank });
+
+    expectRejected(response, "rank");
+    expect(response.body.errors[0].msg).toBe("Bitte wähle einen Rank aus der Liste oder lass das Feld weg.");
 });

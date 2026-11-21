@@ -25,10 +25,23 @@ const request: GenerateRequestResource = {
 // Eine gültige KI-Antwort passend zu "request"
 const validAiAnswer = {
     results: [
-        { platform: "tiktok", hooks: ["H1", "H2"], captions: ["C1"], hashtags: ["#a", "#b", "#c"], titles: [] },
-        { platform: "youtube-shorts", hooks: ["H3", "H4"], captions: ["C2"], hashtags: ["#d", "#e", "#f"], titles: ["T1", "T2"] },
+        { platform: "tiktok", hooks: ["H1", "H2"], captions: ["C1"], hashtags: ["#a", "#b", "#c"], titles: [], tags: [] },
+        {
+            platform: "youtube-shorts", hooks: ["H3", "H4"], captions: ["C2"], hashtags: ["#d", "#e", "#f"],
+            titles: ["T1", "T2"], tags: ["valorant ace", "phantom"],
+        },
     ],
 };
+
+// Was daraus beim Client ankommt: Unser Code setzt feste Hashtags davor und kürzt auf
+// die gewünschte Anzahl (hier 3). Bei den Tags steht "valorant" vorne.
+const expectedResults = [
+    { platform: "tiktok", hooks: ["H1", "H2"], captions: ["C1"], hashtags: ["#valorant", "#fyp", "#a"], titles: [], tags: [] },
+    {
+        platform: "youtube-shorts", hooks: ["H3", "H4"], captions: ["C2"], hashtags: ["#valorant", "#shorts", "#fyp"],
+        titles: ["T1", "T2"], tags: ["valorant", "valorant ace", "phantom"],
+    },
+];
 
 // Lässt die Attrappe bei jeder Anfrage mit diesem Antworttext antworten
 function aiAnswers(answer: unknown) {
@@ -178,14 +191,116 @@ test("generateSuggestions, Map steht immer ausdrücklich als 'nicht angegeben' i
     expect(promptText(0)).toContain("Map: not specified. Do not name any map");
 });
 
-test("generateSuggestions, Regel: eigenen Agent nie raten, andere Agents und Map nur aus der Beschreibung", async () => {
+test("generateSuggestions, Regel: eigenen Agent und Rank nie raten, andere Agents und Map nur aus der Beschreibung", async () => {
     aiAnswers(validAiAnswer);
 
     await generateSuggestions(request);
 
     const { systemInstruction } = callParams(0).config;
-    expect(systemInstruction).toContain("Never guess the player's agent");
+    expect(systemInstruction).toContain("Name the player's own agent and rank only if they are given");
+    expect(systemInstruction).toContain("Never guess them.");
     expect(systemInstruction).toContain("if they are mentioned in the description");
+});
+
+// ---------- Rank ----------
+
+test("generateSuggestions, gewählter Rank steht im Prompt", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions({ ...request, rank: "Gold" });
+
+    expect(promptText(0)).toContain("Player's rank (selected by the user, always correct): Gold");
+});
+
+test("generateSuggestions, ohne gewählten Rank steht ausdrücklich 'nicht angegeben' im Prompt", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    expect(promptText(0)).toContain("Player's rank: not specified. Do not name any rank.");
+});
+
+// ---------- Valorant-Wissen, Hashtags und Tags ----------
+
+test("generateSuggestions, System-Anweisung enthält das Valorant-Wissen zu Highlights und Kill-Zähler", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const { systemInstruction } = callParams(0).config;
+    expect(systemInstruction).toContain("Valorant knowledge");
+    for (const highlight of ["Ace", "1vX clutch", "ninja defuse", "quick scope", "multi-kills of 3 or more"]) {
+        expect(systemInstruction).toContain(highlight);
+    }
+    expect(systemInstruction).toContain("III = 3 kills, IV = 4 kills, V = Ace");
+});
+
+test("generateSuggestions, System-Anweisung enthält die Hashtag-Gruppen und Verbote", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const { systemInstruction } = callParams(0).config;
+    expect(systemInstruction).toContain("#clip #gaming #highlight #gameplay #peak");
+    expect(systemInstruction).toContain("#4k #insane #prime #vamos");
+    expect(systemInstruction).toContain("Never use names of professional players");
+    expect(systemInstruction).toContain("#good");
+});
+
+test("generateSuggestions, videoContent fragt nach Kill-Zähler und Highlight-Typ", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const { description } = callParams(0).config.responseJsonSchema.properties.videoContent;
+    expect(description).toContain("kill counter");
+    expect(description).toContain("highlight type");
+});
+
+test("generateSuggestions, feste Hashtags mit Agent und Rank stehen vorne", async () => {
+    aiAnswers(validAiAnswer);
+
+    const result = await generateSuggestions({
+        ...request,
+        agent: "KAY/O",
+        rank: "Immortal",
+        counts: { ...request.counts, hashtags: 7 },
+    });
+
+    expect(result.results[0].hashtags).toEqual(["#valorant", "#fyp", "#kayo", "#immortal", "#a", "#b", "#c"]);
+    expect(result.results[1].hashtags).toEqual(["#valorant", "#shorts", "#fyp", "#kayo", "#immortal", "#d", "#e"]);
+});
+
+test("generateSuggestions, Tags bei TikTok werden verworfen, auch wenn die KI welche liefert", async () => {
+    aiAnswers({
+        results: [{ ...validAiAnswer.results[0], tags: ["soll es nicht geben"] }, validAiAnswer.results[1]],
+    });
+
+    const result = await generateSuggestions(request);
+
+    expect(result.results[0].tags).toEqual([]);
+});
+
+test("generateSuggestions, Hashtags werden nur bis zur Anzahl angefragt, nicht genau (sonst füllt die KI auf)", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const itemSchema = callParams(0).config.responseJsonSchema.properties.results.items;
+    expect(itemSchema.properties.hashtags.minItems).toBe(1);
+    expect(itemSchema.properties.hashtags.maxItems).toBe(3);
+    expect(promptText(0)).toContain("hashtags up to 3");
+    expect(callParams(0).config.systemInstruction).toContain("Never invent placeholder hashtags");
+});
+
+test("generateSuggestions, Tags fragen das Schema bis zur Höchstzahl an", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const itemSchema = callParams(0).config.responseJsonSchema.properties.results.items;
+    expect(itemSchema.properties.tags.maxItems).toBe(15);
+    expect(itemSchema.required).toContain("tags");
 });
 
 test("generateSuggestions, Agent steht auch im 2. Versuch ohne Video im Prompt", async () => {
@@ -203,7 +318,7 @@ test("generateSuggestions, videoContent aus der KI-Antwort geht nicht an den Cli
 
     const result = await generateSuggestions(request);
 
-    expect(result).toEqual({ ...validAiAnswer, source: "video" });
+    expect(result).toEqual({ results: expectedResults, source: "video" });
 });
 
 test("generateSuggestions, die KI ist auf Valorant ausgerichtet", async () => {
@@ -222,7 +337,7 @@ test("generateSuggestions, Prompt-Text enthält Plattformen, Anzahl und Beschrei
     const text = promptText(0);
     expect(text).toContain("tiktok");
     expect(text).toContain("youtube-shorts");
-    expect(text).toContain("hooks 2, captions 1, hashtags 3, titles 2");
+    expect(text).toContain("hooks 2, captions 1, hashtags up to 3, titles 2");
     expect(text).toContain("Spike in letzter Sekunde entschärft");
     // Das Video geht als eigener Teil mit, im Text steht weder Link noch Video-ID
     expect(text).not.toContain("https://");
@@ -296,7 +411,7 @@ test("generateSuggestions, Videoanalyse klappt: source ist video, nur eine Anfra
 
     const result = await generateSuggestions(request);
 
-    expect(result).toEqual({ ...validAiAnswer, source: "video" });
+    expect(result).toEqual({ results: expectedResults, source: "video" });
     expect(generateContent).toHaveBeenCalledTimes(1);
 });
 
@@ -351,7 +466,7 @@ test("generateSuggestions, zusätzliche Plattformen in der KI-Antwort werden ign
     aiAnswers({
         results: [
             ...validAiAnswer.results,
-            { platform: "instagram", hooks: ["X"], captions: ["X"], hashtags: ["#x"], titles: [] },
+            { platform: "instagram", hooks: ["X"], captions: ["X"], hashtags: ["#x"], titles: [], tags: [] },
         ],
     });
 
@@ -450,6 +565,8 @@ test.each([
     ["hooks enthält nur leere Texte", { results: [{ ...validAiAnswer.results[0], hooks: ["", "  "] }, validAiAnswer.results[1]] }],
     ["captions fehlt", { results: [{ ...validAiAnswer.results[0], captions: undefined }, validAiAnswer.results[1]] }],
     ["Titel bei YouTube Shorts fehlen", { results: [validAiAnswer.results[0], { ...validAiAnswer.results[1], titles: [] }] }],
+    ["Tags bei YouTube Shorts fehlen", { results: [validAiAnswer.results[0], { ...validAiAnswer.results[1], tags: [] }] }],
+    ["Tags sind keine Liste", { results: [validAiAnswer.results[0], { ...validAiAnswer.results[1], tags: "valorant" }] }],
 ])("generateSuggestions, KI-Antwort ist ungültig: %s", async (_name, answer) => {
     aiAnswers(answer);
     await expect(generateSuggestions(request)).rejects.toThrow(AiServiceError);

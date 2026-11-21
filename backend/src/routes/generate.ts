@@ -1,6 +1,6 @@
 import express from "express";
 import { body, matchedData, validationResult } from "express-validator";
-import { AGENTS, COUNT_LIMITS, PLATFORMS, type GenerateRequestResource } from "../Resources.js";
+import { AGENTS, COUNT_LIMITS, PLATFORMS, RANKS, type GenerateRequestResource } from "../Resources.js";
 import { AiRateLimitError, AiUnavailableError, generateSuggestions } from "../services/aiService.js";
 import { extractYouTubeVideoId, isAllowedClipUrl } from "../services/urlValidation.js";
 
@@ -49,6 +49,8 @@ const postGenerateValidators = [
     // agent ist optional: Fehlt das Feld, wird es nicht geprüft und nicht weitergegeben.
     // Wird es mitgeschickt (auch als "" oder null), muss es ein Agent aus der Liste sein.
     oneOf("agent", AGENTS, "Bitte wähle einen Agent aus der Liste oder lass das Feld weg.").optional(),
+    // rank genauso wie agent
+    oneOf("rank", RANKS, "Bitte wähle einen Rank aus der Liste oder lass das Feld weg.").optional(),
 ];
 
 generateRouter.post("/", postGenerateValidators, async (req: express.Request, res: express.Response) => {
