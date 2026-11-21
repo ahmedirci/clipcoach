@@ -9,7 +9,7 @@
 - [x] 1. Projektstruktur, Git-Repo, `.gitignore`, README-Grundgerüst
 - [x] 2. Backend: Express-Server mit TypeScript, Endpunkt `POST /api/generate` mit Beispieldaten (Demo-Modus)
 - [x] 3. Validierung: URL-Allowlist und Eingabeprüfung mit express-validator, mit Tests
-- [ ] 4. KI-Anbindung
+- [x] 4. KI-Anbindung
   - [x] 4a. Mehrere Plattformen und einstellbare Anzahl der Vorschläge (Demo-Modus)
   - [x] 4b. Anbindung an Google Gemini auf Basis der Beschreibung
   - [x] 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
@@ -29,7 +29,7 @@
    - bis zu 3 Captions
    - bis zu 10 passende Hashtags: feste Basis (`#valorant`, `#fyp`, Plattform-Hashtag, Agent, Rank) plus clipbezogene
    - bis zu 4 Titelvorschläge und bis zu 15 Such-Tags (nur bei YouTube Shorts, da TikTok und Instagram keine Videotitel haben)
-4. Ist das Video öffentlich, analysiert die KI zusätzlich das Video selbst (Bild und Ton): Waffen, Kills, Spike und den besten Moment. Den eigenen Agent und die Map übernimmt sie nur aus den Angaben des Nutzers, weil die Bilderkennung dabei in Messungen unzuverlässig war. Die App zeigt ehrlich an, ob die Vorschläge auf der Videoanalyse oder nur auf der Beschreibung beruhen.
+4. Ist das Video öffentlich, analysiert die KI zusätzlich das Video selbst (Bild und Ton): Kills, Spike und den besten Moment (z. B. ein Ace). Agent, Map und Waffen übernimmt sie nur aus den Angaben des Nutzers, weil die Bilderkennung dabei in Messungen unzuverlässig war (Waffen-Skins täuschen zum Beispiel). Die App zeigt ehrlich an, ob die Vorschläge auf der Videoanalyse oder nur auf der Beschreibung beruhen.
 
 ## Tech-Stack
 

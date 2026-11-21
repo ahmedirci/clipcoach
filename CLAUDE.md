@@ -211,7 +211,7 @@ Statuscodes:
 - **Kontingent sparen:** nur die ersten 3 Minuten (`videoMetadata.endOffset: "180s"`, Shorts sind maximal 3 Minuten lang). Gemessen: etwa 89 Tokens pro Sekunde Video, ein 35-Sekunden-Clip also rund 3.100 Tokens. Free Tier: höchstens 8 Stunden YouTube-Video pro Tag.
 - **Auflösung:** `mediaResolution: MEDIA_RESOLUTION_LOW` ist gesetzt, hat bei YouTube-Links aber laut Messung vom 21.11.2026 **keine Wirkung**: niedrige, mittlere und hohe Auflösung ergaben exakt dieselbe Tokenzahl (3.204) und dieselben Erkennungsfehler. Die Einstellung bleibt drin, weil sie nicht schadet und bei anderen Videoquellen Kontingent sparen würde.
 - **Schutz vor Trollen** (Beschreibung passt nicht zum Video):
-  - Zusätzliche System-Anweisung im Video-Modus: Das Video ist die einzige Wahrheit über den Inhalt, die Beschreibung ist nur ein Hinweis und kann absichtlich irreführend sein. Aus der Beschreibung wird nur die Sprache übernommen. Zeigt das Video kein Valorant, schreibt die KI über das Spiel, das wirklich zu sehen ist.
+  - Zusätzliche System-Anweisung im Video-Modus: Das Video ist die einzige Wahrheit über den Inhalt, die Beschreibung ist nur ein Hinweis und kann absichtlich irreführend sein. **Passt die Beschreibung nicht** zum Video (anderes Spiel, völlig andere Situation), wird ihr Inhalt ignoriert und nur die Sprache übernommen. **Passt sie**, werden ihre Details genutzt, die das Video nicht zuverlässig zeigt (Waffen, andere Agents, Map). Zeigt das Video kein Valorant, schreibt die KI über das Spiel, das wirklich zu sehen ist. (Früher hieß die Regel „nur die Sprache übernehmen“, auch bei passender Beschreibung. Dadurch ignorierte die KI im Video-Modus z. B. die Waffen aus der Beschreibung.)
   - Das JSON-Schema bekommt im Video-Modus das Feld `videoContent`, das die KI per `propertyOrdering` **zuerst** ausfüllen muss (was ist im Video zu sehen?). Erst danach schreibt sie die Vorschläge. `videoContent` wird nur intern genutzt und nicht an den Client geschickt.
   - Gemessen am 21.11.2026 (Overwatch-Clip mit Minecraft-Beschreibung): nur mit Anweisung 2 von 3 Durchläufen richtig, mit `videoContent` 3 von 3.
 - Nur Links, die die Allowlist bestanden haben und eine Video-ID enthalten, werden an Gemini übergeben.
@@ -226,7 +226,7 @@ Messung am 21.11.2026 mit einem echten Clip (Nutzer spielt Neon; Mate stirbt am 
 
 | Information | Ergebnis | Woher sie deshalb kommt |
 | --- | --- | --- |
-| Waffen und Waffenwechsel | 3 von 3 richtig (Vandal → Phantom), auch ohne Hinweise zu Magazingrößen. **Aber:** In einem zweiten Clip mit Waffen-Skin falsch („Odin“ statt Vandal), siehe Schritt 4e | Video (bedingt zuverlässig) |
+| Waffen und Waffenwechsel | 3 von 3 richtig (Vandal → Phantom), auch ohne Hinweise zu Magazingrößen. **Aber:** In einem zweiten Clip mit Waffen-Skin falsch („Odin“ statt Vandal), siehe Schritt 4e | nur aus der Beschreibung (Entscheidung nach 4e) |
 | Anzahl Kills | 3 von 3 richtig | Video |
 | Seite und Spike-Plant | 3 von 3 richtig | Video |
 | Highlight-Moment | gut brauchbar | Video |
@@ -242,14 +242,14 @@ Weitere Befunde:
 
 Umsetzung:
 
-- `videoContent` fragt nur nach dem Zuverlässigen: Spiel, Waffen (mit Wechsel), Kills, Spike, Seite, bestes Highlight. Die Hooks sollen um das Highlight gebaut werden.
+- `videoContent` fragt nur nach dem Zuverlässigen: Spiel, Kills (mit Kill-Zähler), Spike, Seite, Highlight-Typ, bestes Highlight, und sagt ausdrücklich, dass Waffen, Agents und Maps nicht aus dem Video bestimmt werden sollen. Die Hooks sollen um das Highlight gebaut werden. (Waffen standen hier anfangs auch drin, siehe „Waffen nur aus der Beschreibung“.)
 - Regel in der System-Anweisung: eigenen Agent nie raten; andere Agents und Map nur, wenn sie in der Beschreibung stehen; Rundenausgang nur, wenn eindeutig erkennbar.
 - **Die Regel allein hat nicht gereicht.** Ohne gewählten Agent schrieb die KI trotzdem „Diesen Omen Play musst du sehen!“, und einmal nannte sie ungefragt die Map. Deshalb steht im Prompt bei den Nutzerdaten immer ausdrücklich:
   - mit Agent: `Player's agent (selected by the user, always correct): Neon`
   - ohne Agent: `Player's agent: not specified. Do not name any agent unless it is mentioned in the description.`
   - immer: `Map: not specified. Do not name any map unless it is mentioned in the description.`
   - Ergebnis danach: ohne Agent 3 von 3 ohne erfundene Agents oder Maps; mit Neon wird Neon genannt; Troll-Test (Minecraft-Beschreibung) 3 von 3 richtig.
-- Platzhalter wie `[Agent]` werden bewusst nicht verwendet: Ohne Auswahl bleiben die Texte allgemein, damit man sie direkt kopieren kann. Waffen brauchen keine Platzhalter, sie werden zuverlässig erkannt.
+- Platzhalter wie `[Agent]` werden bewusst nicht verwendet: Ohne Auswahl bleiben die Texte allgemein, damit man sie direkt kopieren kann. Für Waffen gilt dasselbe: ohne Nennung in der Beschreibung keine Waffennamen.
 - Bekannte Schwäche: Bei sehr knappen Beschreibungen („Eine Runde von gestern“) werden die Hooks eher allgemein, und die Caption übernimmt teils die Beschreibung. Geplante Verbesserung: kurzer Valorant-Kontext (Begriffe, typische Highlights, übliche Hashtags) aus Stichpunkten des Nutzers.
 - Lehre für Tests: Agent-Namen in Texten nur als ganze Wörter suchen, sonst steckt „Omen“ in „Moment“.
 
@@ -285,6 +285,17 @@ Fachwissen aus Stichpunkten des Nutzers (Valorant-Spieler), ergänzt durch Reche
 - Nach der Korrektur (zweiter Live-Test am selben Tag): Fallback ohne Video liefert 10 saubere Hashtags (`#valorant #fyp #valo #ace #clip …`), keine Platzhalter. Mit Video, Rank „Gold“ und Map „Ascent“: Ace erkannt, `#gold` an fester Stelle, Tags beginnen mit `valorant, Gold, Ascent`.
 - **Waffen mit Skins:** Im Ace-Clip (Vandal mit Skin, dritter Kill mit der Classic) erkannte die KI einmal „Odin“ und einmal „Vandal“; die Classic gar nicht. Im ersten Clip (Vandal und Phantom) war die Erkennung 3 von 3 richtig. Waffen sind also nur bedingt zuverlässig, Skins verändern das Aussehen stark.
 
+**Waffen nur aus der Beschreibung** (Entscheidung des Nutzers nach dem Befund oben, „Variante 1“). Ein eigenes Waffen-Feld gibt es bewusst nicht: Ein Clip kann mehrere Waffen haben, das wäre zu viel Aufwand im Formular, und laut Nutzer ist die Waffe oft nicht so wichtig. Ein falscher Waffenname wäre peinlicher als keiner.
+
+- `videoContent` fragt nicht mehr nach Waffen.
+- Regeln: Waffen nur nennen, wenn sie in der Beschreibung stehen; nie aus dem Video raten (Skins).
+- **Die Regel allein hat im Video-Modus nicht gereicht:** Mit Video ignorierte die KI die Waffen aus der Beschreibung („Ace mit der Vandal, dritter Kill mit der Classic“ ergab Texte ohne Waffen), ohne Video wurden sie genutzt. Ursache war auch die alte Troll-Regel „nur die Sprache übernehmen“ (siehe „Schutz vor Trollen“).
+- Deshalb sucht unser Code die Waffen selbst: `WEAPONS` in `aiService.ts` (19 Waffen laut playvalorant.com/de-de/arsenal, Stand 21.11.2026, inklusive der neueren Bandit, ohne Messer). `findMentionedWeapons` sucht sie als **ganze Wörter** ohne Rücksicht auf Groß-/Kleinschreibung („Odin-Spray“ findet Odin, „Ghostbusters“ findet keine Ghost).
+  - mit Waffen: `Weapons used (from the description, use them in the suggestions): Classic, Vandal`
+  - ohne Waffen: `Weapons: Do not name any weapon unless it is mentioned in the description.`
+- Ergebnis (Live-Test mit Video): „Classic-Wechsel zum Ace!“, Caption „Sauberes Ace mit Vandal und Classic!“, Tags `vandal, classic`. Neutrale Beschreibung: keine Waffennamen. Troll-Test (Minecraft-Beschreibung): weiterhin Ace erkannt, kein Minecraft.
+- Nebenbei: Captions enthielten teils Hashtags. Regel ergänzt: Captions ohne Hashtags (die sind eine eigene Liste). Im Live-Test danach keine Hashtags mehr in Captions.
+
 ## Sicherheitsregeln (immer einhalten)
 
 - **Keine Datei-Uploads und keine eigenen Video-Downloads.** Bewusste Entscheidung, um Schadsoftware, zu große Dateien und unzulässige Inhalte zu vermeiden. Clips werden nur per Link angegeben.
@@ -319,7 +330,7 @@ Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-S
    - 4b. Gemini-Anbindung in `aiService.ts` auf Basis der Beschreibung: Prompt, JSON-Schema, Prüfung der KI-Antwort, eigene Fehlerklassen, 503 bei erschöpftem Kontingent
    - 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
    - 4d. Fokus auf Valorant und Erkennungsgenauigkeit: Spielauswahl entfernt, gemessen, was die KI zuverlässig erkennt, optionales Feld `agent`, Agent und Map nur vom Nutzer (siehe „Was die KI im Valorant-Clip zuverlässig erkennt“)
-   - 4e. Valorant-Kontext, Hashtags und YouTube-Tags: Highlights und Kill-Zähler im Prompt, feste Hashtags per Code, optionale Felder `rank` und `map`, neue Ausgabe `tags` (siehe „Valorant-Kontext, Hashtags und Tags“)
+   - 4e. Valorant-Kontext, Hashtags und YouTube-Tags: Highlights und Kill-Zähler im Prompt, feste Hashtags per Code, optionale Felder `rank` und `map`, neue Ausgabe `tags`, Waffen nur aus der Beschreibung (siehe „Valorant-Kontext, Hashtags und Tags“)
 5. Frontend: Formular und Ergebnisanzeige (inkl. Hinweis, ob das Video analysiert wurde). Formulare in React habe ich im Studium noch nicht vertieft (Blatt 11 war optional). Hier besonders gründlich erklären.
 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 7. Videovorschau per oEmbed
