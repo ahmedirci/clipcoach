@@ -160,16 +160,28 @@ Statuscodes:
 
 - **400** bei ungültigen Eingaben, mit Body `{ "errors": [...] }` (Format von express-validator), ohne interne Details.
 - **503**, wenn das Gemini-Kontingent erschöpft ist (Gemini antwortet mit 429), mit der Meldung „Nutzungslimit erreicht. Bitte versuche es nach einiger Zeit erneut.“ 429 ist für unser eigenes Rate Limiting (Schritt 6) reserviert, damit das Frontend beide Fälle unterscheiden kann. Später möglich: die genaue Wartezeit anzeigen (Gemini liefert oft `retryDelay` mit).
+- **503**, wenn Gemini überlastet ist oder nicht rechtzeitig antwortet (Gemini antwortet mit 503 oder 504, oder unser Timeout läuft ab), mit der Meldung „Die KI ist gerade überlastet. Bitte versuche es in ein paar Minuten erneut.“ Bei uns ist dann nichts kaputt, deshalb kein 500.
 - **500** bei allen anderen Fehlern, mit allgemeiner Meldung.
 
 ## KI-Anbindung
 
 - Der gesamte KI-Aufruf steckt in genau einer Datei: `backend/src/services/aiService.ts`. Der Rest des Backends kennt den Anbieter nicht. So lässt sich der Anbieter später wechseln, ohne anderen Code anzufassen.
 - **Demo-Modus:** Wenn in `backend/.env` kein `GEMINI_API_KEY` gesetzt ist, liefert `aiService.ts` feste Beispieldaten im selben JSON-Format. So kann jeder das Repo klonen und starten, ohne Key und ohne Kosten.
-- **Free-Tier-Limits:** Wenn Gemini mit Status 429 antwortet (Limit erreicht), bekommt der Client Status 503 mit einer verständlichen Meldung (siehe API), keine internen Details. Dafür gibt es eigene Fehlerklassen im Service; der Router kennt nur diese, nicht Gemini.
+- **Modell:** Standard ist `gemini-3.5-flash-lite` (stabil, von Google für neue Projekte empfohlen). Im Test am 21.11.2026 antwortete es in knapp 2 Sekunden, während `gemini-3.8-flash` im Free Tier wiederholt überlastet war (503) bzw. die 30 Sekunden überschritt (504). Für die Videoanalyse (4c) gezielt prüfen, ob ein stärkeres Modell nötig ist. Über `GEMINI_MODEL` in der `.env` austauschbar, ohne den Code anzufassen, da Google Modelle regelmäßig umbenennt und abschaltet. Nur stabile Modelle verwenden, keine Preview- oder Experimental-Modelle.
+- **SDK-Aufruf:** `ai.models.generateContent` mit `systemInstruction`, `responseMimeType: "application/json"` und `responseJsonSchema`. Timeout 30 Sekunden. Genau eine Gemini-Anfrage pro Nutzeranfrage:
+  - keine automatischen Wiederholungen (`retryOptions` bewusst nicht gesetzt), damit ein 429 sofort als 503 beim Client ankommt
+  - `automaticContinuation: false`, sonst schickt das SDK bei unfertigen Antworten selbstständig weitere Anfragen (jede mit eigenem Timeout und eigener Abrechnung)
+  - `thinkingConfig: { thinkingLevel: LOW }`: Für Captions und Hashtags reicht kurzes Nachdenken; schneller und spart Kontingent. Mit Standard-Denktiefe hat `gemini-3.8-flash` im Test die 30 Sekunden überschritten.
+- **Fehlerklassen:** Der Service übersetzt Gemini-Fehler in eigene Klassen; der Router kennt nur diese, nicht Gemini:
+  - `AiRateLimitError`: Gemini antwortet mit 429 (Free-Tier-Limit erreicht) → 503 „Nutzungslimit erreicht …“
+  - `AiUnavailableError`: Gemini antwortet mit 503 (überlastet) oder 504, oder unser Timeout läuft ab (`AbortError`) → 503 „Die KI ist gerade überlastet …“
+  - `AiServiceError`: alles andere (Netzwerk, 400, 500, ungültige KI-Antwort) → 500
+  - Der ursprüngliche Fehler hängt als `cause` dran und landet nur im Server-Log, nie beim Client.
+- **Prompt Injection:** Die festen Regeln stehen in der System-Anweisung, getrennt von den Nutzerdaten. Die Beschreibung wird mit `JSON.stringify` als abgegrenzter Textwert eingefügt, und die KI wird angewiesen, Anweisungen darin zu ignorieren. Selbst wenn das nicht greift, schützen uns das JSON-Schema, die eigene Prüfung der Antwort und die Darstellung als reiner Text im Frontend.
 - **Ein Aufruf für alle Plattformen:** Gemini wird pro Request nur einmal gefragt, auch wenn mehrere Plattformen gewählt sind. Das spart Kontingent.
 - **Sprache:** Die Vorschläge kommen in derselben Sprache wie die Beschreibung.
-- **KI-Antwort nicht blind vertrauen:** Gemini bekommt ein JSON-Schema vorgegeben. Die Antwort wird trotzdem im Backend geprüft (Typen, Anzahl, Plattformen), bevor sie an den Client geht.
+- **KI-Antwort nicht blind vertrauen:** Gemini bekommt ein JSON-Schema vorgegeben. Die Antwort wird trotzdem im Backend geprüft (Typen, Anzahl, Plattformen), bevor sie an den Client geht. Reihenfolge und Plattformen bestimmt der Request, nicht die KI; zu viele Einträge werden gekürzt, Titel bei TikTok und Instagram verworfen.
+- **Tests schicken nie echte KI-Anfragen:** `vitest.config.ts` leert `GEMINI_API_KEY` für alle Tests. Tests für die Gemini-Anbindung ersetzen das SDK mit `vi.mock("@google/genai")` und setzen einen Fake-Key mit `vi.stubEnv`.
 - Im Free Tier kann Google Eingaben zum Training nutzen. Deshalb werden nur Spiel, Plattformen, gewünschte Anzahl, Clip-Beschreibung und (ab Version 2) der öffentliche YouTube-Link an die KI geschickt, keine personenbezogenen Daten.
 
 ## Videoanalyse (Version 2)
