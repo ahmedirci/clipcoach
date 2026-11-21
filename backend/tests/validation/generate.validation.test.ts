@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import supertest from "supertest";
 import { app } from "../../src/app.js";
-import { COUNT_LIMITS, PLATFORMS } from "../../src/Resources.js";
+import { AGENTS, COUNT_LIMITS, PLATFORMS } from "../../src/Resources.js";
 import { generateSuggestions } from "../../src/services/aiService.js";
 
 // Der Service wird durch eine Attrappe ersetzt. So testen wir nur die Validierung
@@ -279,4 +279,37 @@ const invalidCountCases = countFields.flatMap((field) => [
 test.each(invalidCountCases)("POST /api/generate, Anzahl %s ist %s", async (field, _name, value) => {
     const counts = { ...validBody.counts, [field]: value };
     expectRejected(await postGenerate({ ...validBody, counts }), `counts.${field}`);
+});
+
+// ---------- agent (optional) ----------
+
+test("POST /api/generate, ohne Agent wird angenommen und kein Agent weitergegeben", async () => {
+    const response = await postGenerate(validBody);
+
+    expect(response.status).toBe(200);
+    // toHaveBeenCalledWith vergleicht exakt: Ein Feld "agent" würde den Test scheitern lassen
+    expect(generateSuggestions).toHaveBeenCalledWith(validBody);
+});
+
+test.each(AGENTS)("POST /api/generate, Agent %s wird angenommen und weitergegeben", async (agent) => {
+    const response = await postGenerate({ ...validBody, agent });
+
+    expect(response.status).toBe(200);
+    expect(generateSuggestions).toHaveBeenCalledWith({ ...validBody, agent });
+});
+
+test.each([
+    ["ein unbekannter Agent", "Sierra"],
+    ["kleingeschrieben", "neon"],
+    ["falsch geschrieben", "KAYO"],
+    ["ein leerer Text", ""],
+    ["null", null],
+    ["eine Zahl", 1],
+    ["ein Array", ["Neon"]],
+    ["ein Objekt", { name: "Neon" }],
+])("POST /api/generate, Agent ist %s", async (_name, agent) => {
+    const response = await postGenerate({ ...validBody, agent });
+
+    expectRejected(response, "agent");
+    expect(response.body.errors[0].msg).toBe("Bitte wähle einen Agent aus der Liste oder lass das Feld weg.");
 });

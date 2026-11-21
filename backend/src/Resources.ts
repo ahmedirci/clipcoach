@@ -5,6 +5,17 @@
 export const PLATFORMS = ["tiktok", "instagram", "youtube-shorts"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+// Alle Valorant-Agents, Schreibweise wie auf playvalorant.com/de-de/agents (Stand 21.11.2026).
+// Die Liste muss bei neuen Agents ergänzt werden. Das KI-Modell muss einen Agent
+// nicht kennen: Der Name wird als Text an die KI geschickt.
+export const AGENTS = [
+    "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher", "Deadlock", "Fade",
+    "Gekko", "Harbor", "Hush", "Iso", "Jett", "KAY/O", "Killjoy", "Miks", "Neon", "Omen",
+    "Phoenix", "Raze", "Reyna", "Sage", "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse",
+    "Waylay", "Yoru",
+] as const;
+export type Agent = (typeof AGENTS)[number];
+
 // Höchstwerte für die gewünschte Anzahl an Vorschlägen pro Kategorie
 export const COUNT_LIMITS = {
     hooks: 5,
@@ -29,6 +40,8 @@ export type GenerateRequestResource = {
     platforms: Platform[];
     description: string;
     counts: SuggestionCounts;
+    // Optional: der Agent, den der Nutzer im Clip spielt. Fehlt er, wird kein Agent genannt.
+    agent?: Agent;
 };
 
 // Vorschläge für genau eine Plattform

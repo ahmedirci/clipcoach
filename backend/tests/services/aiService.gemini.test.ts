@@ -135,6 +135,69 @@ test("generateSuggestions, mit Video beschreibt die KI zuerst den Videoinhalt (v
     expect(schema.propertyOrdering).toEqual(["videoContent", "results"]);
 });
 
+test("generateSuggestions, videoContent fragt nach dem, was zuverlässig erkannt wird", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const { description } = callParams(0).config.responseJsonSchema.properties.videoContent;
+    expect(description).toContain("weapons");
+    expect(description).toContain("kills");
+    expect(description).toContain("spike");
+    expect(description).toContain("highlight");
+    // Agents und Map erkennt die KI nicht zuverlässig, danach wird nicht gefragt
+    expect(description).not.toContain("agent");
+    expect(description).not.toContain("map");
+});
+
+// ---------- Agent ----------
+
+test("generateSuggestions, gewählter Agent steht im Prompt", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions({ ...request, agent: "Neon" });
+
+    expect(promptText(0)).toContain("Player's agent (selected by the user, always correct): Neon");
+});
+
+test("generateSuggestions, ohne gewählten Agent steht ausdrücklich 'nicht angegeben' im Prompt", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const text = promptText(0);
+    expect(text).toContain("Player's agent: not specified. Do not name any agent");
+    expect(text).not.toContain("always correct");
+});
+
+test("generateSuggestions, Map steht immer ausdrücklich als 'nicht angegeben' im Prompt", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions({ ...request, agent: "Neon" });
+
+    expect(promptText(0)).toContain("Map: not specified. Do not name any map");
+});
+
+test("generateSuggestions, Regel: eigenen Agent nie raten, andere Agents und Map nur aus der Beschreibung", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions(request);
+
+    const { systemInstruction } = callParams(0).config;
+    expect(systemInstruction).toContain("Never guess the player's agent");
+    expect(systemInstruction).toContain("if they are mentioned in the description");
+});
+
+test("generateSuggestions, Agent steht auch im 2. Versuch ohne Video im Prompt", async () => {
+    generateContent
+        .mockRejectedValueOnce(new ApiError({ message: "Video nicht verfügbar", status: 400 }))
+        .mockResolvedValueOnce({ text: JSON.stringify(validAiAnswer) });
+
+    await generateSuggestions({ ...request, agent: "KAY/O" });
+
+    expect(promptText(1)).toContain("Player's agent (selected by the user, always correct): KAY/O");
+});
+
 test("generateSuggestions, videoContent aus der KI-Antwort geht nicht an den Client", async () => {
     aiAnswers({ videoContent: "Overwatch 2 Teamfight", ...validAiAnswer });
 
