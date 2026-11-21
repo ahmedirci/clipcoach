@@ -22,6 +22,14 @@ export const RANKS = [
 ] as const;
 export type Rank = (typeof RANKS)[number];
 
+// Valorant-Maps laut playvalorant.com/de-de/maps (Stand 21.11.2026), alphabetisch.
+// Der Typ heißt GameMap statt Map, weil Map in JavaScript schon eine eingebaute Klasse ist.
+export const MAPS = [
+    "Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven",
+    "Icebox", "Lotus", "Pearl", "Split", "Summit", "Sunset",
+] as const;
+export type GameMap = (typeof MAPS)[number];
+
 // Höchstwerte für die gewünschte Anzahl an Vorschlägen pro Kategorie
 export const COUNT_LIMITS = {
     hooks: 5,
@@ -50,6 +58,8 @@ export type GenerateRequestResource = {
     agent?: Agent;
     // Optional: der Rank des Nutzers. Fehlt er, wird kein Rank genannt.
     rank?: Rank;
+    // Optional: die Map des Clips. Fehlt sie, wird nur eine Map aus der Beschreibung genannt.
+    map?: GameMap;
 };
 
 // Vorschläge für genau eine Plattform

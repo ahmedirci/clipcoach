@@ -220,6 +220,26 @@ test("generateSuggestions, ohne gewählten Rank steht ausdrücklich 'nicht angeg
     expect(promptText(0)).toContain("Player's rank: not specified. Do not name any rank.");
 });
 
+// ---------- Map ----------
+
+test("generateSuggestions, gewählte Map steht im Prompt", async () => {
+    aiAnswers(validAiAnswer);
+
+    await generateSuggestions({ ...request, map: "Ascent" });
+
+    const text = promptText(0);
+    expect(text).toContain("Map (selected by the user, always correct): Ascent");
+    expect(text).not.toContain("Map: not specified");
+});
+
+test("generateSuggestions, gewählte Map steht in den YouTube-Tags", async () => {
+    aiAnswers(validAiAnswer);
+
+    const result = await generateSuggestions({ ...request, map: "Ascent" });
+
+    expect(result.results[1].tags).toEqual(["valorant", "Ascent", "valorant ace", "phantom"]);
+});
+
 // ---------- Valorant-Wissen, Hashtags und Tags ----------
 
 test("generateSuggestions, System-Anweisung enthält das Valorant-Wissen zu Highlights und Kill-Zähler", async () => {

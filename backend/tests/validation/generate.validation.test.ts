@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import supertest from "supertest";
 import { app } from "../../src/app.js";
-import { AGENTS, COUNT_LIMITS, PLATFORMS, RANKS } from "../../src/Resources.js";
+import { AGENTS, COUNT_LIMITS, MAPS, PLATFORMS, RANKS } from "../../src/Resources.js";
 import { generateSuggestions } from "../../src/services/aiService.js";
 
 // Der Service wird durch eine Attrappe ersetzt. So testen wir nur die Validierung
@@ -336,4 +336,37 @@ test.each([
 
     expectRejected(response, "rank");
     expect(response.body.errors[0].msg).toBe("Bitte wähle einen Rank aus der Liste oder lass das Feld weg.");
+});
+
+// ---------- map (optional) ----------
+
+test.each(MAPS)("POST /api/generate, Map %s wird angenommen und weitergegeben", async (map) => {
+    const response = await postGenerate({ ...validBody, map });
+
+    expect(response.status).toBe(200);
+    expect(generateSuggestions).toHaveBeenCalledWith({ ...validBody, map });
+});
+
+test("POST /api/generate, Agent, Rank und Map zusammen werden weitergegeben", async () => {
+    const body = { ...validBody, agent: "Neon", rank: "Gold", map: "Ascent" };
+
+    const response = await postGenerate(body);
+
+    expect(response.status).toBe(200);
+    expect(generateSuggestions).toHaveBeenCalledWith(body);
+});
+
+test.each([
+    ["eine unbekannte Map", "District"],
+    ["kleingeschrieben", "ascent"],
+    ["mit Leerzeichen am Ende", "Ascent "],
+    ["ein leerer Text", ""],
+    ["null", null],
+    ["eine Zahl", 1],
+    ["ein Array", ["Bind"]],
+])("POST /api/generate, Map ist %s", async (_name, map) => {
+    const response = await postGenerate({ ...validBody, map });
+
+    expectRejected(response, "map");
+    expect(response.body.errors[0].msg).toBe("Bitte wähle eine Map aus der Liste oder lass das Feld weg.");
 });

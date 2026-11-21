@@ -1,9 +1,10 @@
-import type { Agent, Platform, Rank } from "../Resources.js";
+import type { Agent, GameMap, Platform, Rank } from "../Resources.js";
 
-// Was der Nutzer selbst angegeben hat (beides optional)
+// Was der Nutzer selbst zum Clip angegeben hat (alles optional)
 export type PlayerInfo = {
     agent?: Agent;
     rank?: Rank;
+    map?: GameMap;
 };
 
 // Plattform-Hashtag, den unser Code selbst setzt. TikTok hat keinen eigenen, dort reicht #fyp.
@@ -72,13 +73,13 @@ export function finalizeHashtags(aiHashtags: string[], platform: Platform, playe
 
 /**
  * Baut die unsichtbaren Such-Tags für YouTube.
- * Vorne stehen "valorant" und (falls angegeben) Agent und Rank, danach die Tags der KI.
+ * Vorne stehen "valorant" und (falls angegeben) Agent, Rank und Map, danach die Tags der KI.
  * Tags dürfen Leerzeichen enthalten. Entfernt werden ein "#" am Anfang, Kommas
  * (YouTube trennt Tags mit Kommas) und spitze Klammern (bei YouTube nicht erlaubt).
  * Es kommen höchstens MAX_YOUTUBE_TAGS Tags mit zusammen höchstens MAX_YOUTUBE_TAGS_CHARS Zeichen heraus.
  */
 export function finalizeYouTubeTags(aiTags: string[], player: PlayerInfo): string[] {
-    const candidates = ["valorant", player.agent, player.rank, ...aiTags]
+    const candidates = ["valorant", player.agent, player.rank, player.map, ...aiTags]
         .filter((tag): tag is string => typeof tag === "string")
         .map((tag) => tag.replace(/^#+/, "").replace(/[,<>]/g, "").replace(/\s+/g, " ").trim())
         .filter((tag) => tag.length > 0);

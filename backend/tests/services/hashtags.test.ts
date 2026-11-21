@@ -120,3 +120,12 @@ test("finalizeHashtags, ein Hashtag mit genau 30 Zeichen bleibt erhalten", () =>
     const tag = "#" + "a".repeat(29);
     expect(finalizeHashtags([tag], "tiktok", {}, 10)).toEqual(["#valorant", "#fyp", tag]);
 });
+
+test("finalizeYouTubeTags, die Map kommt nach Agent und Rank", () => {
+    expect(finalizeYouTubeTags(["valorant ace"], { agent: "Neon", rank: "Gold", map: "Ascent" }))
+        .toEqual(["valorant", "Neon", "Gold", "Ascent", "valorant ace"]);
+});
+
+test("finalizeHashtags, die Map wird nicht als Hashtag gesetzt", () => {
+    expect(finalizeHashtags(["#valo"], "tiktok", { map: "Ascent" }, 10)).toEqual(["#valorant", "#fyp", "#valo"]);
+});
