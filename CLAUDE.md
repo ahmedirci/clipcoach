@@ -60,7 +60,7 @@ clipcoach/
 ├── backend/               Express + TypeScript
 │   ├── src/
 │   │   ├── routes/        Express-Router (HTTP rein/raus, Validierung)
-│   │   ├── services/      Logik, z. B. aiService.ts und urlValidation.ts
+│   │   ├── services/      Logik: aiService.ts, urlValidation.ts, hashtags.ts
 │   │   ├── Resources.ts   gemeinsame Typen (Request/Response)
 │   │   ├── app.ts         Express-App ohne listen() (für Tests)
 │   │   └── index.ts       Serverstart
@@ -118,13 +118,15 @@ Request:
   "platforms": ["tiktok | instagram | youtube-shorts", "..."],
   "description": "Kurze Beschreibung des Clips",
   "counts": { "hooks": 3, "captions": 1, "hashtags": 5, "titles": 2 },
-  "agent": "Neon"
+  "agent": "Neon",
+  "rank": "Gold"
 }
 ```
 
 - `platforms`: mindestens eine Plattform, nur feste Werte, keine doppelten Einträge.
 - `counts`: Pflichtfeld, gewünschte Anzahl pro Kategorie als ganze Zahl von 1 bis zum Höchstwert. Gilt für jede gewählte Plattform gleich. Das Frontend füllt sinnvolle Standardwerte vor.
 - `agent`: **optional**, der Agent, den der Nutzer im Clip spielt. Nur Werte aus `AGENTS` in `Resources.ts` (30 Agents, Schreibweise wie auf playvalorant.com/de-de/agents, Stand 21.11.2026, z. B. `"KAY/O"`). Fehlt das Feld, wird kein Agent genannt. `""` oder `null` werden abgelehnt: „kein Agent“ heißt, das Feld wird nicht mitgeschickt. Neue Agents müssen in der Liste ergänzt werden.
+- `rank`: **optional**, der Rank des Nutzers. Nur Werte aus `RANKS` in `Resources.ts` (Iron, Bronze, Silver, Gold, Platinum, Diamond, Ascendant, Immortal, Radiant, ohne Stufen wie „Gold 2“). Gleiche Regeln wie bei `agent`.
 
 | Kategorie | Höchstwert |
 | --- | --- |
@@ -143,14 +145,16 @@ Response:
       "hooks": ["..."],
       "captions": ["..."],
       "hashtags": ["..."],
-      "titles": []
+      "titles": [],
+      "tags": []
     },
     {
       "platform": "youtube-shorts",
       "hooks": ["..."],
       "captions": ["..."],
       "hashtags": ["..."],
-      "titles": ["..."]
+      "titles": ["..."],
+      "tags": ["..."]
     }
   ],
   "source": "description | video"
@@ -159,6 +163,8 @@ Response:
 
 - `results` enthält pro gewählter Plattform einen Eintrag, in derselben Reihenfolge wie im Request.
 - **Titel gibt es nur bei YouTube Shorts.** Bei TikTok und Instagram gibt es keinen Videotitel (dort ist die Caption der Text zum Video), deshalb ist `titles` dort immer eine leere Liste.
+- **Tags gibt es nur bei YouTube Shorts:** unsichtbare Such-Tags ohne „#“ (Leerzeichen erlaubt), höchstens 15 und zusammen höchstens 500 Zeichen inklusive Kommas (YouTube-Grenze). Bei TikTok und Instagram immer eine leere Liste.
+- `hashtags` können kürzer sein als angefordert („bis zu“), siehe „Valorant-Kontext, Hashtags und Tags“.
 - `source` zeigt, worauf die Vorschläge beruhen: nur auf der Beschreibung oder zusätzlich auf der Videoanalyse (ab Version 2). `source` setzt unser Code, nie die KI.
 
 Statuscodes:
@@ -245,6 +251,36 @@ Umsetzung:
 - Bekannte Schwäche: Bei sehr knappen Beschreibungen („Eine Runde von gestern“) werden die Hooks eher allgemein, und die Caption übernimmt teils die Beschreibung. Geplante Verbesserung: kurzer Valorant-Kontext (Begriffe, typische Highlights, übliche Hashtags) aus Stichpunkten des Nutzers.
 - Lehre für Tests: Agent-Namen in Texten nur als ganze Wörter suchen, sonst steckt „Omen“ in „Moment“.
 
+## Valorant-Kontext, Hashtags und Tags (Schritt 4e)
+
+Fachwissen aus Stichpunkten des Nutzers (Valorant-Spieler), ergänzt durch Recherche.
+
+**Valorant-Wissen in der System-Anweisung** (gilt mit und ohne Video):
+
+- Highlights, vom stärksten zum schwächeren: Ace, 1vX-Clutch, Spike-Defuse in letzter Sekunde, Ninja-Defuse, Quick Scope (schneller Kill mit Sniper), Multi-Kills ab 3, Teleport hinter den Gegner (nur Yoru, Omen, Chamber). Gun-Flicks bewusst nicht, da kaum zuverlässig erkennbar.
+- Kill-Zähler oben rechts in römischen Ziffern: III = 3 Kills, IV = 4, V = Ace; durch Revives sind 6 oder 7 möglich.
+- `videoContent` fragt zusätzlich nach Kill-Zähler und Highlight-Typ.
+
+**Hashtags: Was sich sicher festlegen lässt, setzt der Code (`services/hashtags.ts`), nicht die KI.**
+
+- `finalizeHashtags` setzt vorne fest: `#valorant`, Plattform-Hashtag (`#reels` bei Instagram, `#shorts` bei YouTube Shorts, bei TikTok keiner), `#fyp` (auf jeder Plattform), dann Agent und Rank, falls angegeben (`KAY/O` → `#kayo`). Danach folgen die Hashtags der KI. Doppelte fallen weg (ohne Groß-/Kleinschreibung), gekürzt wird auf die gewünschte Anzahl.
+- Die KI liefert nur die clipbezogenen Hashtags, in dieser Reihenfolge: 1. `#valo`, 2. Highlight-Typ (`#ace #clutch #quickscope #ninjadefuse`), 3. `#clip #gaming #highlight #gameplay #peak`, 4. weitere passende (`#fast #highiq`), 5. nur bei sehr starken Clips `#4k #insane #prime #vamos`.
+- Bewusst **nicht**: Namen von Profispielern (ändern sich ständig, wirken wie Clickbait), leere Füllwörter wie `#good`, Beleidigungen und Hassbegriffe (leichte Flüche sind laut Nutzer okay).
+- Bereinigung: alles kleingeschrieben, nur Buchstaben, Ziffern und `_`. Einträge der KI werden an Kommas und vor jedem weiteren `#` aufgeteilt (`"#clip #gaming"` → zwei Hashtags, `"Quick Scope"` → `#quickscope`). Hashtags mit mehr als 30 Zeichen werden verworfen.
+- Hashtags werden nur **bis zu** der gewünschten Anzahl angefragt (Schema: `minItems: 1`), nicht genau, und Platzhalter sind ausdrücklich verboten.
+- Warum: In einer Messung (Fallback ohne Video) lieferte die KI bei „genau 10“ Platzhalter wie `#unused1` und schrieb mehrere Hashtags in einen Eintrag, was die Bereinigung zu `#clipgaminghighlightgameplaypeak…` zusammenklebte.
+- YouTube: Nur die ersten drei Hashtags erscheinen über dem Titel, bei mehr als 15 ignoriert YouTube alle. Unser Höchstwert ist 10. Die ersten drei sind bei Shorts immer `#valorant #shorts #fyp`.
+
+**YouTube-Tags (`tags`)**, nur bei YouTube Shorts:
+
+- `finalizeYouTubeTags`: vorne `valorant`, dann Agent und Rank (falls angegeben), dann die Tags der KI. Entfernt werden `#` am Anfang, Kommas (Trennzeichen bei YouTube) und spitze Klammern (bei YouTube nicht erlaubt). Höchstens 15 Tags, zusammen höchstens 500 Zeichen inklusive Kommas.
+- Die Map kommt nur in die Tags, wenn sie in der Beschreibung steht (die KI erkennt sie nicht zuverlässig).
+
+**Messung am 21.11.2026** mit einem Ace-Clip (neutrale Beschreibung „Meine Runde von heute“):
+
+- Mit Video: Ace selbst erkannt („So sieht ein Ace aus!“, Titel „Perfektes Ace in Valorant“), Hashtags genau nach Plan (`#valorant #fyp #valo #ace #clip #gaming #highlight #gameplay #peak #fast`), sinnvolle Tags (98 von 500 Zeichen), keine erfundenen Agents oder Maps.
+- Fallback ohne Video (Google war bei der Videoanalyse überlastet): unbrauchbare Hashtags (siehe oben). Daraufhin korrigiert. Ein echter Test nach der Korrektur steht noch aus, weil Google beim erneuten Test überlastet war (503).
+
 ## Sicherheitsregeln (immer einhalten)
 
 - **Keine Datei-Uploads und keine eigenen Video-Downloads.** Bewusste Entscheidung, um Schadsoftware, zu große Dateien und unzulässige Inhalte zu vermeiden. Clips werden nur per Link angegeben.
@@ -256,7 +292,7 @@ Umsetzung:
   - der Link muss auf ein **einzelnes Video** zeigen (Video-ID mit genau 11 Zeichen aus Buchstaben, Ziffern, `-` und `_`). Kanäle, Playlists und die Startseite werden mit eigener Meldung abgelehnt: „Bitte gib einen Link zu einem einzelnen YouTube-Video an, nicht zu einem Kanal oder einer Playlist.“
 - Niemals `startsWith` oder `includes` auf den ganzen Link anwenden, da Tricks wie `youtube.com.boese-seite.de` oder `youtube.com@boese-seite.de` sonst durchkommen.
 - **Validierung doppelt:** Im Frontend für die Nutzerfreundlichkeit, im Backend als eigentliche Sicherheitsschicht. Das Backend vertraut dem Frontend nie. Nur validierte Daten (`matchedData`) gehen an die Services.
-- **Eingaben begrenzen:** `platforms` nur aus festen Werten und ohne Duplikate, `agent` (optional) nur aus der festen Agent-Liste, `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
+- **Eingaben begrenzen:** `platforms` nur aus festen Werten und ohne Duplikate, `agent` und `rank` (beide optional) nur aus den festen Listen, `counts` nur ganze Zahlen von 1 bis zum Höchstwert, `description` mit Länge 1 bis 500 Zeichen, Request-Body-Größe in Express begrenzen (`express.json({ limit: ... })`).
 - **API-Key schützen:** Der KI-API-Key steht nur in `backend/.env`. Die `.env` steht in der `.gitignore` und wird nie committet. Lege eine `backend/.env.example` ohne echten Key an. Der Key wird niemals im Frontend verwendet.
 - **Rate Limiting** auf `/api/generate` mit express-rate-limit, damit niemand das kostenlose Kontingent aufbraucht.
 - **helmet** für sichere HTTP-Header.
@@ -279,7 +315,7 @@ Für die Vorschau keine Videos selbst laden oder speichern, sondern die oEmbed-S
    - 4b. Gemini-Anbindung in `aiService.ts` auf Basis der Beschreibung: Prompt, JSON-Schema, Prüfung der KI-Antwort, eigene Fehlerklassen, 503 bei erschöpftem Kontingent
    - 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
    - 4d. Fokus auf Valorant und Erkennungsgenauigkeit: Spielauswahl entfernt, gemessen, was die KI zuverlässig erkennt, optionales Feld `agent`, Agent und Map nur vom Nutzer (siehe „Was die KI im Valorant-Clip zuverlässig erkennt“)
-   - 4e. (geplant) Valorant-Kontext für bessere Hooks: Begriffe, typische Highlights und übliche Hashtags aus Stichpunkten des Nutzers
+   - 4e. Valorant-Kontext, Hashtags und YouTube-Tags: Highlights und Kill-Zähler im Prompt, feste Hashtags per Code, optionales Feld `rank`, neue Ausgabe `tags` (siehe „Valorant-Kontext, Hashtags und Tags“). Offen: echter Test des Fallback-Wegs nach der Hashtag-Korrektur (Google war beim Test überlastet)
 5. Frontend: Formular und Ergebnisanzeige (inkl. Hinweis, ob das Video analysiert wurde). Formulare in React habe ich im Studium noch nicht vertieft (Blatt 11 war optional). Hier besonders gründlich erklären.
 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 7. Videovorschau per oEmbed

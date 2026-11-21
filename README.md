@@ -14,7 +14,7 @@
   - [x] 4b. Anbindung an Google Gemini auf Basis der Beschreibung
   - [x] 4c. Videoanalyse für YouTube-Links mit Fallback auf die Beschreibung
   - [x] 4d. Fokus auf Valorant und genauere Erkennung von Agent, Waffen und Highlights
-  - [ ] 4e. Valorant-Kontext für bessere Hooks (Begriffe, typische Highlights, Hashtags)
+  - [ ] 4e. Valorant-Kontext (typische Highlights), Hashtag-Strategie und YouTube-Tags
 - [ ] 5. Frontend: Formular und Ergebnisanzeige
 - [ ] 6. Absicherung: Rate Limiting, helmet, CORS, Fehlerbehandlung
 - [ ] 7. Videovorschau per oEmbed
@@ -23,12 +23,12 @@
 ## Geplante Funktionen
 
 1. YouTube-Link zum Clip einfügen (Video oder Short)
-2. Eine oder mehrere Zielplattformen wählen, die gewünschte Anzahl an Vorschlägen einstellen, optional den gespielten Agent auswählen und den Clip kurz beschreiben
+2. Eine oder mehrere Zielplattformen wählen, die gewünschte Anzahl an Vorschlägen einstellen, optional den gespielten Agent und den eigenen Rank auswählen und den Clip kurz beschreiben
 3. Die KI liefert pro Plattform, in der Sprache der Beschreibung:
-   - bis zu 5 Hooks für die ersten 3 Sekunden
+   - bis zu 5 Hooks für die ersten 3 Sekunden, aufgebaut um das stärkste Highlight (z. B. Ace, 1vX-Clutch, Defuse in letzter Sekunde)
    - bis zu 3 Captions
-   - bis zu 10 passende Hashtags
-   - bis zu 4 Titelvorschläge (nur bei YouTube Shorts, da TikTok und Instagram keine Videotitel haben)
+   - bis zu 10 passende Hashtags: feste Basis (`#valorant`, `#fyp`, Plattform-Hashtag, Agent, Rank) plus clipbezogene
+   - bis zu 4 Titelvorschläge und bis zu 15 Such-Tags (nur bei YouTube Shorts, da TikTok und Instagram keine Videotitel haben)
 4. Ist das Video öffentlich, analysiert die KI zusätzlich das Video selbst (Bild und Ton): Waffen, Kills, Spike und den besten Moment. Den eigenen Agent und die Map übernimmt sie nur aus den Angaben des Nutzers, weil die Bilderkennung dabei in Messungen unzuverlässig war. Die App zeigt ehrlich an, ob die Vorschläge auf der Videoanalyse oder nur auf der Beschreibung beruhen.
 
 ## Tech-Stack
