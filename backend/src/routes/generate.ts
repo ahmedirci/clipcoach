@@ -1,7 +1,7 @@
 import express from "express";
 import { body, matchedData, validationResult } from "express-validator";
 import { COUNT_LIMITS, GAMES, PLATFORMS, type GenerateRequestResource } from "../Resources.js";
-import { generateSuggestions } from "../services/aiService.js";
+import { AiRateLimitError, AiUnavailableError, generateSuggestions } from "../services/aiService.js";
 import { isAllowedClipUrl } from "../services/urlValidation.js";
 
 export const generateRouter = express.Router();
@@ -58,8 +58,21 @@ generateRouter.post("/", postGenerateValidators, async (req: express.Request, re
     try {
         const result = await generateSuggestions(request);
         res.status(200).send(result);
-    } catch {
-        // Keine internen Details an den Client senden
+    } catch (error) {
+        // Den echten Fehler nur im Server-Log ausgeben, nie an den Client senden
+        console.error("Fehler beim Erzeugen der Vorschläge:", error);
+
+        if (error instanceof AiRateLimitError) {
+            // 503 statt 429: Nicht der Nutzer hat zu viel angefragt, sondern unser
+            // Gemini-Kontingent ist erschöpft. 429 bleibt für unser eigenes Rate Limiting.
+            res.status(503).send({ errors: [{ msg: "Nutzungslimit erreicht. Bitte versuche es nach einiger Zeit erneut." }] });
+            return;
+        }
+        if (error instanceof AiUnavailableError) {
+            // Bei uns ist nichts kaputt: Die KI ist nur gerade überlastet oder zu langsam
+            res.status(503).send({ errors: [{ msg: "Die KI ist gerade überlastet. Bitte versuche es in ein paar Minuten erneut." }] });
+            return;
+        }
         res.status(500).send({ errors: [{ msg: "Interner Serverfehler" }] });
     }
 });
